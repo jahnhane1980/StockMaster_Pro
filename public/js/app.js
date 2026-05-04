@@ -28,7 +28,11 @@ async function initApp() {
         if (window.StockMaster.Chart) {
             window.StockMaster.Chart.init();
         }
-        
+
+        if (window.StockMaster.Intelligence) {
+            await window.StockMaster.Intelligence.init();
+        }
+
         setupEventBus();
 
         console.log('StockMaster: Initialisierung erfolgreich.');

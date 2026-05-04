@@ -1,57 +1,43 @@
 const express = require('express');
 const path = require('path');
 const { initDB } = require('./database');
-const TickerRepository = require('./tickerRepository'); // NEU: Import Repository
+const TickerRepository = require('./tickerRepository');
+const IntelligenceRepository = require('./intelligenceRepository'); // NEU
 
 const app = express();
 const PORT = 3000;
 
-// WICHTIG: Damit der Server JSON-Daten in POST-Anfragen versteht
 app.use(express.json());
-
 initDB();
 
 app.use(express.static(path.join(__dirname, '../public')));
 
-// --- API ENDPUNKTE ---
+// --- Ticker API (bestehend) ---
+app.get('/api/tickers', (req, res) => res.json(TickerRepository.getAllTickers()));
+app.post('/api/tickers', (req, res) => res.json(TickerRepository.upsertTicker(req.body)));
+app.delete('/api/tickers/:symbol', (req, res) => res.json(TickerRepository.deleteTicker(req.params.symbol)));
 
-// 1. Alle Ticker holen
-app.get('/api/tickers', (req, res) => {
+// --- Intelligence API (NEU) ---
+app.get('/api/intelligence/:symbol', (req, res) => {
     try {
-        const tickers = TickerRepository.getAllTickers();
-        res.json(tickers);
+        const data = IntelligenceRepository.getIntelligence(req.params.symbol);
+        res.json(data || { message: "Keine Daten vorhanden" });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// 2. Ticker hinzufügen/aktualisieren
-app.post('/api/tickers', (req, res) => {
+app.post('/api/intelligence', (req, res) => {
     try {
-        const result = TickerRepository.upsertTicker(req.body);
-        res.json({ success: true, result });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// 3. Ticker löschen
-app.delete('/api/tickers/:symbol', (req, res) => {
-    try {
-        TickerRepository.deleteTicker(req.params.symbol);
+        IntelligenceRepository.upsertIntelligence(req.body);
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/index.html'));
-});
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
 app.listen(PORT, () => {
-    console.log(`-----------------------------------------`);
-    console.log(`🚀 StockMaster Pro Server gestartet!`);
-    console.log(`🌐 API bereit unter http://localhost:${PORT}/api/tickers`);
-    console.log(`-----------------------------------------`);
+    console.log(`🚀 StockMaster Server läuft auf Port ${PORT}`);
 });

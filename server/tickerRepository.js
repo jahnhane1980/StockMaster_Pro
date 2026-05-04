@@ -11,6 +11,7 @@ const TickerRepository = {
     },
 
     upsertTicker: (ticker) => {
+        // Wir definieren das Statement einmal
         const stmt = db.prepare(`
             INSERT INTO tickers (symbol, name, type, sector, industry, linked_assets, last_updated)
             VALUES (@symbol, @name, @type, @sector, @industry, @linked_assets, @last_updated)
@@ -23,13 +24,13 @@ const TickerRepository = {
                 last_updated=excluded.last_updated
         `);
 
-        // Wir stellen sicher, dass JEDER Parameter existiert (Defaults setzen)
+        // Wir füllen JEDES Feld mit einem Fallback, damit SQLite nicht meckert
         return stmt.run({
             symbol: ticker.symbol,
             name: ticker.name || '',
             type: ticker.type || 'stock',
-            sector: ticker.sector || '',
-            industry: ticker.industry || '',
+            sector: ticker.sector || '',   // WICHTIG: Fallback auf leerer String
+            industry: ticker.industry || '', // WICHTIG: Fallback auf leerer String
             last_updated: ticker.last_updated || Date.now(),
             linked_assets: JSON.stringify(ticker.linked_assets || [])
         });
