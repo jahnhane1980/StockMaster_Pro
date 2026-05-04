@@ -1,0 +1,14 @@
+{
+  "name": "stockmaster-pro",
+  "version": "1.0.0",
+  "description": "Investment Terminal with Node.js and SQLite",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "better-sqlite3": "^9.4.3"
+  }
+}
