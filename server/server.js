@@ -4,9 +4,9 @@ const path = require('path');
 const { db, initDB } = require('./database');
 
 // Repositories
-const TickerRepository = require('./tickerRepository');
-const IntelligenceRepository = require('./intelligenceRepository');
-const ChartRepository = require('./chartRepository');
+const TickerRepository = require('./repositories/tickerRepository');
+const IntelligenceRepository = require('./repositories/intelligenceRepository');
+const ChartRepository = require('./repositories/chartRepository');
 
 // Services (Hybrid Setup)
 const FinnhubService = require('./services/finnhubService');
