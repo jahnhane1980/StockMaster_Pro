@@ -1,54 +1,88 @@
-const Database = require('better-sqlite3');
+// server/database.js
+const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-require('dotenv').config();
 
-// Datenbank-Verbindung mit dem Namen aus der .env herstellen
-const dbName = process.env.DB_NAME || 'stockmaster.db';
-const db = new Database(path.join(__dirname, dbName));
+// Pfad zur SQLite-Datei (wird beim Start neu erstellt, wenn sie nicht existiert)
+const dbPath = path.resolve(__dirname, 'stockmaster.db'); 
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error('[DB] Fehler beim Öffnen der Datenbank:', err.message);
+    } else {
+        console.log('[DB] Erfolgreich mit der SQLite-Datenbank verbunden.');
+    }
+});
 
-/**
- * Initialisiert das Datenbank-Schema
- */
-function initDB() {
-    console.log(`StockMaster: Datenbank (${dbName}) wird initialisiert...`);
+// Tabellen initialisieren
+db.serialize(() => {
+    // 1. TICKERS (Unsere Watchlist & Basis-Tabelle)
+    db.run(`CREATE TABLE IF NOT EXISTS tickers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol TEXT UNIQUE NOT NULL,
+        name TEXT,
+        added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
 
-    // Tickers Tabelle (Stammdaten)
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS tickers (
-            symbol TEXT PRIMARY KEY,
-            name TEXT,
-            type TEXT,
-            sector TEXT,
-            industry TEXT,
-            linked_assets TEXT,
-            last_updated INTEGER
-        )
-    `);
+    // 2. HISTORICAL DATA (Hybrid-Tabelle für AV und Massive)
+    db.run(`CREATE TABLE IF NOT EXISTS historical_data (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticker TEXT NOT NULL,
+        date_str TEXT NOT NULL,      -- 'YYYY-MM-DD'
+        open REAL,
+        high REAL,
+        low REAL,
+        close REAL,
+        adjusted_close REAL,         -- Kommt primär von AV
+        volume INTEGER,
+        vwap REAL,                   -- Kommt primär von Massive
+        provider TEXT DEFAULT 'AV',  -- 'AV' oder 'MASSIVE'
+        UNIQUE(ticker, date_str),
+        FOREIGN KEY (ticker) REFERENCES tickers(symbol) ON DELETE CASCADE
+    )`);
 
-    // Intelligence Tabelle (Detaildaten & Fundamentals)
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS intelligence (
-            symbol TEXT PRIMARY KEY,
-            fundamentals_json TEXT,
-            sentiment_score REAL,
-            dark_pool_flag INTEGER,
-            last_updated INTEGER
-        )
-    `);
+    // 3. MARKET METADATA (Für Fundamentaldaten & Caching-Timestamps)
+    db.run(`CREATE TABLE IF NOT EXISTS market_metadata (
+        ticker TEXT PRIMARY KEY,
+        asset_type TEXT,
+        market_cap INTEGER,
+        debt_equity REAL,
+        revenue_growth REAL,
+        last_updated_fundamentals DATETIME,
+        last_updated_history DATETIME,
+        FOREIGN KEY (ticker) REFERENCES tickers(symbol) ON DELETE CASCADE
+    )`);
 
-    // Chart Data Tabelle (Historische Kurse)
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS chart_data (
-            symbol TEXT PRIMARY KEY,
-            data_json TEXT,
-            last_updated INTEGER
-        )
-    `);
+    // 4. SENTIMENT HISTORY (Speichert die News-Scores im Zeitverlauf)
+    db.run(`CREATE TABLE IF NOT EXISTS sentiment_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticker TEXT NOT NULL,
+        timestamp DATETIME NOT NULL,
+        sentiment_score REAL,
+        relevance_score REAL,
+        UNIQUE(ticker, timestamp),
+        FOREIGN KEY (ticker) REFERENCES tickers(symbol) ON DELETE CASCADE
+    )`);
 
-    console.log('✅ SQLite Datenbank-Schema erfolgreich initialisiert.');
-}
+    // 5. ASSET CORRELATIONS (Für das Tracking von Basiswerten wie Gold, BTC)
+    db.run(`CREATE TABLE IF NOT EXISTS asset_correlations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        main_ticker TEXT NOT NULL,
+        linked_ticker TEXT NOT NULL,
+        correlation_score REAL DEFAULT 0,
+        UNIQUE(main_ticker, linked_ticker),
+        FOREIGN KEY (main_ticker) REFERENCES tickers(symbol) ON DELETE CASCADE
+    )`);
+});
 
-module.exports = {
-    db,
-    initDB
-};
+// Hilfsfunktion: Graceful Shutdown für die Datenbank
+process.on('SIGINT', () => {
+    db.close((err) => {
+        if (err) {
+            console.error('[DB] Fehler beim Schließen der Datenbank:', err.message);
+        } else {
+            console.log('[DB] Datenbankverbindung geschlossen.');
+        }
+        process.exit(0);
+    });
+});
+
+module.exports = db;
