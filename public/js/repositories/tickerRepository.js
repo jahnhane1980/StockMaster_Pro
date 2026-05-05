@@ -1,5 +1,6 @@
 /**
  * StockMaster TickerRepository (Frontend)
+ * Kommuniziert mit der Node.js API
  */
 window.StockMaster = window.StockMaster || {};
 
@@ -10,6 +11,18 @@ window.StockMaster.TickerRepository = (function() {
         async init() {
             console.log('📡 TickerRepository: API-Modus initialisiert');
             return Promise.resolve();
+        },
+
+        // KRITISCH: Diese Funktion wurde vom chart.js vermisst
+        async getChartData(symbol) {
+            try {
+                const response = await fetch(`/api/charts/${symbol}`);
+                if (!response.ok) throw new Error('Chart-Ladefehler');
+                return await response.json();
+            } catch (error) {
+                console.error('❌ TickerRepository (GET Chart):', error);
+                return [];
+            }
         },
 
         async getAllTickers() {
@@ -30,17 +43,11 @@ window.StockMaster.TickerRepository = (function() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(tickerData)
                 });
-
-                // FIX: Wenn der Server 500 schickt, hier abbrechen!
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Server-Fehler beim Speichern');
-                }
-
+                if (!response.ok) throw new Error('Speichern fehlgeschlagen');
                 return await response.json();
             } catch (error) {
                 console.error('❌ TickerRepository (POST):', error);
-                throw error; // Den Fehler weiterreichen an die UI
+                throw error;
             }
         },
 
@@ -49,7 +56,7 @@ window.StockMaster.TickerRepository = (function() {
                 const response = await fetch(`${apiUrl}/${symbol}`, {
                     method: 'DELETE'
                 });
-                if (!response.ok) throw new Error('Loesch-Fehler');
+                if (!response.ok) throw new Error('Löschen fehlgeschlagen');
                 return await response.json();
             } catch (error) {
                 console.error('❌ TickerRepository (DELETE):', error);

@@ -1,95 +1,114 @@
 /**
  * StockMaster Intelligence Modul
- * Verwaltet Ticker-Details, Fundamentals und Sentiment
+ * Zuständig für Fundamentals, Sentiment und Daten-Caching
  */
 window.StockMaster = window.StockMaster || {};
 
 window.StockMaster.Intelligence = (function() {
-    const containerId = 'intelligence-container'; // Passe die ID ggf. an deine HTML an
-    const REFRESH_THRESHOLD = 1000 * 60 * 60 * 24; // 24 Stunden (in Millisekunden)
+    // Schwellenwert für Cache-Aktualisierung (24 Stunden)
+    const REFRESH_THRESHOLD = 1000 * 60 * 60 * 24; 
 
+    /**
+     * Initialisiert das Modul
+     */
     async function init() {
         console.log('🧠 Intelligence: Modul initialisiert.');
         bindEvents();
     }
 
+    /**
+     * Bindet globale Events
+     */
     function bindEvents() {
-        // Wir lauschen auf den Event, den die Watchlist beim Klick feuert[cite: 1, 2]
+        // Lauscht auf die Auswahl eines Tickers in der Watchlist
         document.addEventListener(window.StockMaster.Events.TICKER_SELECTED, async (e) => {
             const symbol = e.detail.symbol;
             await loadTickerDetails(symbol);
         });
     }
 
+    /**
+     * Lädt Details (lokal oder von API)
+     */
     async function loadTickerDetails(symbol) {
         console.log(`🔍 Intelligence: Lade Details für ${symbol}...`);
         const repo = window.StockMaster.IntelligenceRepository;
         
         try {
-            // 1. In der lokalen Datenbank nachsehen
+            // 1. Versuche Daten aus der lokalen SQLite zu laden
             const cachedData = await repo.getForSymbol(symbol);
             
-            // 2. Prüfen, ob die Daten "frisch" genug sind
             const now = Date.now();
             if (cachedData && cachedData.last_updated && (now - cachedData.last_updated < REFRESH_THRESHOLD)) {
-                console.log('📦 Nutze Daten aus der SQLite-Datenbank (Cache-Hit)');
+                console.log('📦 Intelligence: Nutze Daten aus der Datenbank (Cache-Hit).');
                 render(cachedData);
             } else {
-                console.log('🌐 Daten veraltet oder nicht vorhanden. Hole API-Update...');
+                console.log('🌐 Intelligence: Daten veraltet oder nicht vorhanden. Hole API-Update...');
                 await fetchAndSaveFreshData(symbol);
             }
         } catch (err) {
-            console.error('❌ Fehler beim Laden der Intelligence-Daten:', err);
+            console.error('❌ Intelligence: Fehler beim Laden der Details:', err);
         }
     }
 
+    /**
+     * Holt frische Daten vom Finnhub Service und speichert sie
+     */
     async function fetchAndSaveFreshData(symbol) {
         const finnhub = window.StockMaster.FinnhubService;
         const repo = window.StockMaster.IntelligenceRepository;
 
-        // Hier kombinieren wir verschiedene API-Calls (Beispielhaft)
         try {
-            // Wir holen Fundamentals (Metriken)
-            const fundamentals = await finnhub.getFundamentals(symbol);
-            
-            // Daten-Objekt für die Datenbank vorbereiten
+            // Abwärtskompatible Prüfung der Finnhub-Methoden
+            let fundamentals = {};
+            if (finnhub) {
+                if (typeof finnhub.getBasicFinancials === 'function') {
+                    fundamentals = await finnhub.getBasicFinancials(symbol);
+                } else if (typeof finnhub.getFundamentals === 'function') {
+                    fundamentals = await finnhub.getFundamentals(symbol);
+                }
+            }
+
             const intelligenceData = {
                 symbol: symbol,
                 fundamentals: fundamentals,
-                sentiment_score: Math.random() * 100, // Beispielwert, falls kein echtes Sentiment vorliegt
-                dark_pool_flag: Math.random() > 0.8 ? 1 : 0 // Beispielhaft
+                sentiment_score: 50, // Standardwert oder Sentiment-Logik hier
+                dark_pool_flag: 0,
+                last_updated: Date.now()
             };
 
-            // 3. In der Datenbank speichern für das nächste Mal
+            // In der Datenbank speichern
             await repo.save(intelligenceData);
             
-            // 4. Anzeigen
+            // UI aktualisieren
             render(intelligenceData);
         } catch (err) {
-            console.error('❌ API-Fehler:', err);
+            console.error('❌ Intelligence: API-Fehler beim Abrufen frischer Daten:', err);
         }
     }
 
+    /**
+     * Rendert die Intelligence-Ansicht
+     */
     function render(data) {
-        const container = document.getElementById('details-container'); // Deine ID aus dem Screenshot
+        const container = document.getElementById('details-container');
         if (!container) return;
 
-        // Hier baust du deine UI zusammen (Beispiel)
         container.innerHTML = `
-            <div class="card">
+            <div class="card intelligence-card">
                 <h3>Intelligence: ${data.symbol}</h3>
-                <div class="stats-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div><strong>Sentiment:</strong> ${data.sentiment_score.toFixed(2)}%</div>
-                    <div><strong>Dark Pool:</strong> ${data.dark_pool_flag ? '⚠️ Aktiv' : 'Normal'}</div>
-                    <div><strong>Last Update:</strong> ${new Date(data.last_updated).toLocaleString()}</div>
+                <div class="intelligence-meta" style="display: flex; gap: 20px; margin-bottom: 15px;">
+                    <span><strong>Sentiment:</strong> ${data.sentiment_score}%</span>
+                    <span><strong>Aktualisiert:</strong> ${new Date(data.last_updated).toLocaleTimeString()}</span>
                 </div>
-                <hr>
-                <pre style="font-size: 0.7rem; background: #f4f4f4; padding: 10px; overflow: auto; max-height: 200px;">
-${JSON.stringify(data.fundamentals, null, 2)}
-                </pre>
+                <div class="fundamentals-preview" style="background: #1e1e1e; color: #00ff00; padding: 10px; border-radius: 4px; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; max-height: 300px; overflow-y: auto;">
+                    <pre>${JSON.stringify(data.fundamentals, null, 2)}</pre>
+                </div>
             </div>
         `;
     }
 
-    return { init };
+    return {
+        init: init
+    };
 })();
