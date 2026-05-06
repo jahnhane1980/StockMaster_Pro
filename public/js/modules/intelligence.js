@@ -17,19 +17,17 @@ window.StockMaster.IntelligenceModule = (() => {
 
     const init = () => {
         if (window.StockMaster.Events) {
-            // Lauscht auf dein bestehendes Event aus der Watchlist
+            // Lauscht auf die Auswahl eines Tickers in der Watchlist
             document.addEventListener(window.StockMaster.Events.TICKER_SELECTED, handleTickerSelected);
             console.log('[IntelligenceModule] Initialisiert.');
-        } else {
-            console.error('[IntelligenceModule] window.StockMaster.Events nicht gefunden!');
         }
     };
 
     const handleTickerSelected = async (event) => {
-        // Nutzt exakt dein bestehendes Payload-Format
         const symbol = event.detail?.symbol;
         if (!symbol) return;
 
+        // UI in Lade-Zustand versetzen
         if (boardPanel) boardPanel.style.display = 'none';
         if (emptyStatePanel) {
             emptyStatePanel.style.display = 'block';
@@ -37,23 +35,33 @@ window.StockMaster.IntelligenceModule = (() => {
         }
 
         try {
-            // Hier kommt der einzige echte Austausch: Wir nutzen das neue Backend!
-            // (Vorher war hier der Call zu FMP/Finnhub)
+            // Daten vom Backend holen
             const data = await window.backendService.getIntelligenceData(symbol);
             
+            // UI aktualisieren (Board füllen)
             updateUI(data);
 
-            // ANMERKUNG: Hier müssen wir klären, wie dein chart.js die Daten bekommt.
-            // Siehe meine Frage unten!
-
-        } catch (error) {
-            console.error('[IntelligenceModule] Fehler:', error);
-            
-            if (emptyStatePanel) {
-                emptyStatePanel.textContent = 'Fehler beim Laden der Daten.';
+            // NEU: Den Chart über das Event-System informieren und die Historie übergeben
+            if (window.StockMaster.Events) {
+                document.dispatchEvent(new CustomEvent(window.StockMaster.Events.CHART_DATA_READY, { 
+                    detail: { 
+                        symbol: data.ticker,
+                        history: data.history || [],
+                        correlations: data.correlations || []
+                    } 
+                }));
             }
 
-            // Nutzt dein sauberes Notification-System
+        } catch (error) {
+            console.error('[IntelligenceModule] Fehler beim Laden der Daten:', error);
+            
+            if (emptyStatePanel) {
+                emptyStatePanel.textContent = error.isLimitError 
+                    ? 'API-Limit erreicht. Bitte später versuchen.' 
+                    : 'Fehler beim Laden der Daten.';
+            }
+
+            // Notification senden
             if (window.StockMaster.Events) {
                 document.dispatchEvent(new CustomEvent(window.StockMaster.Events.GLOBAL_NOTIFICATION, {
                     detail: {
@@ -70,47 +78,56 @@ window.StockMaster.IntelligenceModule = (() => {
         if (boardPanel) boardPanel.style.display = 'block';
 
         if (boardTickerName) boardTickerName.textContent = data.ticker;
-        if (boardPrice) boardPrice.textContent = data.currentPrice ? `$${data.currentPrice.toFixed(2)}` : 'N/A';
         
+        // Preis-Formatierung
+        if (boardPrice) {
+            boardPrice.textContent = data.currentPrice ? `$${data.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
+        }
+        
+        // Change-Anzeige mit Farbcodierung (Style-Erhalt)
         if (boardChange) {
             const changeVal = data.change || 0;
             boardChange.textContent = `${changeVal > 0 ? '+' : ''}${changeVal.toFixed(2)}%`;
             boardChange.style.color = changeVal >= 0 ? '#00e676' : '#ff5252'; 
+            boardChange.style.marginLeft = '10px';
         }
 
+        // Fundamentals (Metadaten aus der DB)
         if (data.fundamentals) {
             if (valMcap) valMcap.textContent = data.fundamentals.market_cap ? formatLargeNumber(data.fundamentals.market_cap) : 'N/A';
             if (valDebt) valDebt.textContent = data.fundamentals.debt_equity ? data.fundamentals.debt_equity.toFixed(2) : 'N/A';
             if (valRev) valRev.textContent = data.fundamentals.revenue_growth ? `${(data.fundamentals.revenue_growth * 100).toFixed(2)}%` : 'N/A';
+        } else {
+            [valMcap, valDebt, valRev].forEach(el => { if(el) el.textContent = 'N/A'; });
         }
 
+        // Sentiment-Anzeige (News Scores)
         if (data.sentiment && data.sentiment.length > 0) {
             const latestScore = data.sentiment[0].sentiment_score; 
             if (sentimentText) {
-                if (latestScore > 0.15) sentimentText.textContent = `Bullish (${latestScore.toFixed(2)})`;
-                else if (latestScore < -0.15) sentimentText.textContent = `Bearish (${latestScore.toFixed(2)})`;
-                else sentimentText.textContent = `Neutral (${latestScore.toFixed(2)})`;
+                let status = 'Neutral';
+                if (latestScore > 0.15) status = 'Bullish';
+                else if (latestScore < -0.15) status = 'Bearish';
+                sentimentText.textContent = `${status} (${latestScore.toFixed(2)})`;
             }
             if (sentimentIndicator) {
                 const positionPercent = ((latestScore + 1) / 2) * 100;
                 sentimentIndicator.style.left = `${positionPercent}%`;
             }
         } else {
-            if (sentimentText) sentimentText.textContent = "Keine News-Daten.";
+            if (sentimentText) sentimentText.textContent = "Keine News-Daten verfügbar.";
+            if (sentimentIndicator) sentimentIndicator.style.left = "50%";
         }
     };
 
     const formatLargeNumber = (num) => {
         if (!num) return 'N/A';
-        if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
-        if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
-        if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
-        return num.toLocaleString();
+        const n = parseFloat(num);
+        if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
+        if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+        if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+        return n.toLocaleString();
     };
 
     return { init };
 })();
-
-document.addEventListener('DOMContentLoaded', () => {
-    window.StockMaster.IntelligenceModule.init();
-});

@@ -6,6 +6,7 @@ window.StockMaster.WatchlistModule = (() => {
     const searchInput = document.getElementById('ticker-search');
     const addBtn = document.getElementById('add-ticker-btn');
     const watchlistContainer = document.getElementById('watchlist-container');
+    const statusMsg = document.getElementById('status-message');
 
     const init = async () => {
         if (addBtn) addBtn.addEventListener('click', handleAddTicker);
@@ -16,17 +17,26 @@ window.StockMaster.WatchlistModule = (() => {
             });
         }
 
-        // Initiales Laden der Watchlist aus deiner lokalen Datenbank/Repository
+        // Initiales Laden der Watchlist beim Start
         await loadData();
+        console.log('[WatchlistModule] Initialisiert.');
     };
 
     const loadData = async () => {
         if (window.StockMaster.TickerRepository && watchlistContainer) {
-            const tickers = await window.StockMaster.TickerRepository.getAllTickers();
-            watchlistContainer.innerHTML = ''; // Container leeren
-            
-            // Jeden Ticker einzeln rendern
-            tickers.forEach(tickerObj => renderTicker(tickerObj));
+            try {
+                const tickers = await window.StockMaster.TickerRepository.getAllTickers();
+                watchlistContainer.innerHTML = ''; // Container leeren
+                
+                if (tickers.length === 0) {
+                    watchlistContainer.innerHTML = '<div class="empty-msg" style="padding: 10px; color: #666; font-size: 0.9em;">Watchlist leer.</div>';
+                    return;
+                }
+
+                tickers.forEach(tickerObj => renderTicker(tickerObj));
+            } catch (error) {
+                console.error('[Watchlist] Fehler beim Laden:', error);
+            }
         }
     };
 
@@ -35,18 +45,12 @@ window.StockMaster.WatchlistModule = (() => {
         if (!symbol) return;
 
         try {
-            // ==========================================
-            // NEU: Hier rufen wir unser neues Backend auf!
-            // ==========================================
+            if (statusMsg) statusMsg.textContent = `Sync für ${symbol}...`;
+            
+            // 1. Backend-Call (Triggert Sync im RIM)
             await window.backendService.addTickerToWatchlist(symbol);
 
-            // ==========================================
-            // DEINE BESTEHENDE LOGIK: Speichern & Event feuern
-            // ==========================================
-            if (window.StockMaster.TickerRepository) {
-                await window.StockMaster.TickerRepository.addTicker({ symbol: symbol });
-            }
-
+            // 2. Event feuern für UI-Komponenten
             if (window.StockMaster.Events) {
                 document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_ADDED, { 
                     detail: { symbol: symbol } 
@@ -58,10 +62,15 @@ window.StockMaster.WatchlistModule = (() => {
             }
 
             searchInput.value = '';
-            await loadData(); // Liste neu aufbauen
+            if (statusMsg) statusMsg.textContent = '';
+            
+            // Liste neu laden
+            await loadData();
 
         } catch (error) {
             console.error('[Watchlist] Fehler beim Hinzufügen:', error);
+            if (statusMsg) statusMsg.textContent = 'Fehler.';
+            
             if (window.StockMaster.Events) {
                 document.dispatchEvent(new CustomEvent(window.StockMaster.Events.GLOBAL_NOTIFICATION, {
                     detail: { type: 'error', message: error.message || 'Fehler beim Hinzufügen.' }
@@ -73,39 +82,53 @@ window.StockMaster.WatchlistModule = (() => {
     const renderTicker = (item) => {
         const div = document.createElement('div');
         div.className = 'watchlist-item'; 
-        div.textContent = item.symbol;
+        div.style.padding = '10px';
+        div.style.borderBottom = '1px solid #333';
+        div.style.cursor = 'pointer';
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.alignItems = 'center';
+        div.dataset.ticker = item.symbol;
 
-        // -----------------------------------------------------
-        // DEIN SNIPPET 1: Ticker auswählen -> Intelligence Board
-        // -----------------------------------------------------
+        const symbolSpan = document.createElement('span');
+        symbolSpan.textContent = item.symbol;
+        symbolSpan.style.fontWeight = 'bold';
+        div.appendChild(symbolSpan);
+
+        // Klick-Event -> Ticker auswählen
         div.addEventListener('click', () => {
             if (window.StockMaster.Events) {
                 document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_SELECTED, { 
                     detail: { symbol: item.symbol } 
                 }));
             }
+            
+            // Visuelles Feedback für Auswahl (Style-Erhalt)
+            document.querySelectorAll('.watchlist-item').forEach(el => el.style.background = 'transparent');
+            div.style.background = 'rgba(255,255,255,0.05)';
         });
 
-        // -----------------------------------------------------
-        // DEIN SNIPPET 2: Ticker löschen
-        // -----------------------------------------------------
-        const deleteBtn = document.createElement('span');
-        deleteBtn.innerHTML = ' &times;'; // Simples X Icon
-        deleteBtn.className = 'delete-btn';
-        deleteBtn.style.cursor = 'pointer';
-        deleteBtn.style.float = 'right';
+        // Löschen-Button
+        const deleteBtn = document.createElement('ion-icon');
+        deleteBtn.setAttribute('name', 'trash-outline');
+        deleteBtn.style.color = '#ff5252';
+        deleteBtn.style.fontSize = '1.2em';
 
         deleteBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (window.StockMaster.TickerRepository) {
-                await window.StockMaster.TickerRepository.deleteTicker(item.symbol);
-                
-                if (window.StockMaster.Events) {
-                    document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_REMOVED, { 
-                        detail: { symbol: item.symbol } 
-                    }));
+            try {
+                if (window.StockMaster.TickerRepository) {
+                    await window.StockMaster.TickerRepository.deleteTicker(item.symbol);
+                    
+                    if (window.StockMaster.Events) {
+                        document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_REMOVED, { 
+                            detail: { symbol: item.symbol } 
+                        }));
+                    }
+                    await loadData();
                 }
-                await loadData();
+            } catch (error) {
+                console.error('[Watchlist] Fehler beim Löschen:', error);
             }
         });
 
@@ -115,7 +138,3 @@ window.StockMaster.WatchlistModule = (() => {
 
     return { init, loadData };
 })();
-
-document.addEventListener('DOMContentLoaded', () => {
-    window.StockMaster.WatchlistModule.init();
-});

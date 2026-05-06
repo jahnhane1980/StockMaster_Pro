@@ -70,4 +70,4 @@ class BackendService {
 }
 
 // Global als Instanz verfügbar machen, damit deine Module darauf zugreifen können
-const backendService = new BackendService();
+window.backendService = new BackendService();

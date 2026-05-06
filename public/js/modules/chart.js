@@ -1,77 +1,108 @@
-require('dotenv').config(); 
-const express = require('express');
-const path = require('path');
-const { db, initDB } = require('./database');
+// public/js/modules/chart.js
 
-// Repositories
-const TickerRepository = require('./repositories/tickerRepository');
-// Alte Repositories für Chart und Intelligence wurden durch DAOs im StockService abgelöst
+window.StockMaster = window.StockMaster || {};
+window.StockMaster.ChartModule = (() => {
 
-// Services (Neues Hybrid Setup: Alpha Vantage + Massive)
-const StockService = require('./services/StockService');
+    const chartContainerId = 'chart-container';
+    let chart;
+    let candleSeries;
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-const CACHE_MS = parseInt(process.env.CACHE_DURATION_MS);
-
-app.use(express.json());
-initDB();
-
-app.use(express.static(path.join(__dirname, '../public')));
-
-/**
- * NEU: API Endpunkt für Watchlist (Triggert Hintergrund-Sync)
- */
-app.post('/api/watchlist', (req, res) => {
-    const symbol = req.body.symbol;
-    if (!symbol) return res.status(400).json({ error: "Symbol fehlt" });
-    
-    // Wir triggern den StockService, warten aber nicht auf die Antwort (Fire & Forget),
-    // damit das Frontend direkt das "OK" bekommt und nicht blockiert wird.
-    console.log(`🌐 Server: Starte Hintergrund-Sync für ${symbol}...`);
-    StockService.getIntelligenceData(symbol).catch(err => {
-        console.error(`❌ Server: Hintergrund-Sync Fehler für ${symbol}:`, err.message);
-    });
-
-    res.json({ success: true, message: `Sync für ${symbol} gestartet.` });
-});
-
-/**
- * NEU: API Endpunkt für Intelligence & Charts (Kombiniert, via StockService)
- */
-app.get('/api/intelligence/:symbol', async (req, res) => {
-    const symbol = req.params.symbol;
-    try {
-        console.log(`🌐 Server: Lade aggregierte Daten für ${symbol}...`);
-        
-        // Der StockService kümmert sich intern um Cache-Checks, Provider-Wahl und Limits
-        const data = await StockService.getIntelligenceData(symbol);
-        
-        res.json(data);
-    } catch (err) {
-        console.error(`❌ Server-Fehler bei Intelligence-Abruf für ${symbol}:`, err.message);
-        
-        // Limit-Error (429) an das Frontend durchreichen
-        if (err.message && err.message.includes('429')) {
-            return res.status(429).json({ 
-                error: "API-Limit erreicht. Bitte kurz warten.", 
-                details: err.message 
-            });
+    /**
+     * Initialisiert den TradingView Lightweight Chart
+     */
+    const init = () => {
+        const container = document.getElementById(chartContainerId);
+        if (!container) {
+            console.warn(`[ChartModule] Container #${chartContainerId} nicht gefunden.`);
+            return;
         }
-        res.status(500).json({ error: "Daten-Management Fehler" });
-    }
-});
 
-// Standard Ticker Endpunkte (Unverändert gelassen für dein lokales UI Repository)
-app.get('/api/tickers', (req, res) => res.json(TickerRepository.getAllTickers()));
-app.post('/api/tickers', (req, res) => res.json(TickerRepository.upsertTicker(req.body)));
-app.delete('/api/tickers/:symbol', (req, res) => {
-    TickerRepository.deleteTicker(req.params.symbol);
-    res.json({ success: true });
-});
+        // Chart-Konfiguration (Farben & Design passend zum Look & Feel)
+        chart = LightweightCharts.createChart(container, {
+            layout: {
+                background: { type: 'solid', color: 'transparent' },
+                textColor: '#d1d4dc',
+                fontSize: 12,
+                fontFamily: 'JetBrains Mono, monospace',
+            },
+            grid: {
+                vertLines: { color: 'rgba(43, 43, 67, 0.3)' },
+                horzLines: { color: 'rgba(43, 43, 67, 0.3)' },
+            },
+            rightPriceScale: {
+                borderColor: 'rgba(197, 203, 206, 0.2)',
+            },
+            timeScale: {
+                borderColor: 'rgba(197, 203, 206, 0.2)',
+                timeVisible: true,
+                secondsVisible: false,
+            },
+            crosshair: {
+                mode: LightweightCharts.CrosshairMode.Normal,
+            },
+        });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
+        // Kerzen-Serie hinzufügen
+        candleSeries = chart.addCandlestickSeries({
+            upColor: '#00e676',
+            downColor: '#ff5252',
+            borderVisible: false,
+            wickUpColor: '#00e676',
+            wickDownColor: '#ff5252',
+        });
 
-app.listen(PORT, () => {
-    console.log(`🚀 StockMaster Pro läuft auf http://localhost:${PORT}`);
-});
+        // Event-Listener für neue Daten registrieren
+        if (window.StockMaster.Events) {
+            document.addEventListener(window.StockMaster.Events.CHART_DATA_READY, handleDataReady);
+            console.log('[ChartModule] Initialisiert und bereit für Daten.');
+        }
+
+        // Responsive Resizing
+        new ResizeObserver(entries => {
+            if (entries.length === 0 || entries[0].target !== container) return;
+            const newRect = entries[0].contentRect;
+            chart.applyOptions({ height: newRect.height, width: newRect.width });
+        }).observe(container);
+    };
+
+    /**
+     * Verarbeitet das CHART_DATA_READY Event
+     */
+    const handleDataReady = (event) => {
+        const { symbol, history, correlations } = event.detail;
+        
+        if (!history || history.length === 0) {
+            console.warn(`[ChartModule] Keine historischen Daten für ${symbol} empfangen.`);
+            candleSeries.setData([]);
+            return;
+        }
+
+        // Daten für Lightweight Charts formatieren
+        // Wir gehen davon aus, dass history bereits harmonisierte Objekte enthält
+        const formattedData = history.map(item => ({
+            time: item.date, // Format: YYYY-MM-DD
+            open: parseFloat(item.open),
+            high: parseFloat(item.high),
+            low: parseFloat(item.low),
+            close: parseFloat(item.close)
+        }));
+
+        // Sortierung sicherstellen (Lightweight Charts benötigt aufsteigende Zeit)
+        formattedData.sort((a, b) => (a.time > b.time ? 1 : -1));
+
+        candleSeries.setData(formattedData);
+        
+        // Den Chart auf die Daten fokussieren
+        chart.timeScale().fitContent();
+
+        console.log(`[ChartModule] Chart für ${symbol} aktualisiert (${formattedData.length} Datenpunkte).`);
+        
+        // Optional: Korrelations-Daten verarbeiten (z.B. als Overlay oder Label)
+        if (correlations && correlations.length > 0) {
+            console.log(`[ChartModule] Korrelierte Assets erkannt:`, correlations.map(c => c.symbol));
+            // Hier könnte zukünftig ein LineSeries Overlay für BTC/Gold etc. implementiert werden.
+        }
+    };
+
+    return { init };
+})();
