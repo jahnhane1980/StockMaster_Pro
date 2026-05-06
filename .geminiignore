@@ -1,0 +1,16 @@
+# Abhängigkeiten & Binärdaten
+node_modules/
+.git/
+dist/
+build/
+.cache/
+
+# Datenbanken (sehr wichtig, da Binärdateien riesig sein können)
+server/*.sqlite
+server/*.db
+*.sqlite-journal
+
+# Logs und Systemdateien
+*.log
+.DS_Store
+.env
