@@ -121,86 +121,77 @@ ul {
 .sm-toast.success { border-left-color: var(--success); }
 .sm-toast.warning { border-left-color: var(--warning); }
 
-/* --- Autocomplete & Watchlist Styles --- */
-.autocomplete-dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    background-color: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    max-height: 250px;
-    overflow-y: auto;
-    z-index: 100;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    display: none;
-}
-
-.autocomplete-item {
-    padding: 0.5rem 0.75rem;
-    cursor: pointer;
+/* --- Watchlist Styles --- */
+.watchlist-item {
+    padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-}
-
-.autocomplete-item:last-child {
-    border-bottom: none;
-}
-
-.autocomplete-item:hover {
-    background-color: var(--background);
-}
-
-.autocomplete-symbol {
-    font-weight: 600;
-    color: var(--primary);
-}
-
-.autocomplete-desc {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.watchlist-item-row {
+    cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
+    transition: background-color 0.2s ease;
 }
 
-.watchlist-item-row:hover {
+.watchlist-item:hover {
     background-color: var(--background);
 }
 
-/* Container für Preis-Platzhalter UND Delete-Button */
-.watchlist-item-right {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-/* Styling für den Löschen-Button (Hover-Effekt Invertierung) */
-.delete-action {
-    color: var(--error);
-    background-color: transparent;
-    border-radius: 4px;
-    padding: 0.25rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 1.1rem;
-    transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-.delete-action:hover {
-    background-color: var(--error);
+.watchlist-item.active {
+    background-color: var(--tertiary);
     color: var(--surface);
+}
+
+.ticker-symbol {
+    font-weight: 600;
+    font-family: var(--font-data);
+}
+
+.delete-btn-icon {
+    color: var(--error);
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.delete-btn-icon:hover {
+    transform: scale(1.1);
+}
+
+/* --- Status & Sentiment Styles --- */
+.positive { color: var(--success) !important; }
+.negative { color: var(--error) !important; }
+
+.sentiment-container {
+    margin-top: 15px;
+}
+
+.sentiment-bar {
+    width: 100%;
+    height: 6px;
+    background-color: var(--border);
+    position: relative;
+    margin-top: 8px;
+    border-radius: 3px;
+}
+
+.sentiment-dot {
+    width: 10px;
+    height: 10px;
+    background-color: var(--text);
+    position: absolute;
+    top: -2px;
+    border-radius: 50%;
+    transition: left 0.3s ease;
+    border: 2px solid var(--surface);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.empty-msg {
+    padding: 1.5rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    text-align: center;
 }

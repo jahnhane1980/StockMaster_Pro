@@ -17,7 +17,6 @@ window.StockMaster.WatchlistModule = (() => {
             });
         }
 
-        // Initiales Laden der Watchlist beim Start
         await loadData();
         console.log('[WatchlistModule] Initialisiert.');
     };
@@ -26,10 +25,10 @@ window.StockMaster.WatchlistModule = (() => {
         if (window.StockMaster.TickerRepository && watchlistContainer) {
             try {
                 const tickers = await window.StockMaster.TickerRepository.getAllTickers();
-                watchlistContainer.innerHTML = ''; // Container leeren
+                watchlistContainer.innerHTML = ''; 
                 
                 if (tickers.length === 0) {
-                    watchlistContainer.innerHTML = '<div class="empty-msg" style="padding: 10px; color: #666; font-size: 0.9em;">Watchlist leer.</div>';
+                    watchlistContainer.innerHTML = '<div class="empty-msg">Watchlist leer.</div>';
                     return;
                 }
 
@@ -47,10 +46,8 @@ window.StockMaster.WatchlistModule = (() => {
         try {
             if (statusMsg) statusMsg.textContent = `Sync für ${symbol}...`;
             
-            // 1. Backend-Call (Triggert Sync im RIM)
             await window.backendService.addTickerToWatchlist(symbol);
 
-            // 2. Event feuern für UI-Komponenten
             if (window.StockMaster.Events) {
                 document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_ADDED, { 
                     detail: { symbol: symbol } 
@@ -63,8 +60,6 @@ window.StockMaster.WatchlistModule = (() => {
 
             searchInput.value = '';
             if (statusMsg) statusMsg.textContent = '';
-            
-            // Liste neu laden
             await loadData();
 
         } catch (error) {
@@ -82,20 +77,13 @@ window.StockMaster.WatchlistModule = (() => {
     const renderTicker = (item) => {
         const div = document.createElement('div');
         div.className = 'watchlist-item'; 
-        div.style.padding = '10px';
-        div.style.borderBottom = '1px solid #333';
-        div.style.cursor = 'pointer';
-        div.style.display = 'flex';
-        div.style.justifyContent = 'space-between';
-        div.style.alignItems = 'center';
         div.dataset.ticker = item.symbol;
 
         const symbolSpan = document.createElement('span');
+        symbolSpan.className = 'ticker-symbol';
         symbolSpan.textContent = item.symbol;
-        symbolSpan.style.fontWeight = 'bold';
         div.appendChild(symbolSpan);
 
-        // Klick-Event -> Ticker auswählen
         div.addEventListener('click', () => {
             if (window.StockMaster.Events) {
                 document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_SELECTED, { 
@@ -103,16 +91,13 @@ window.StockMaster.WatchlistModule = (() => {
                 }));
             }
             
-            // Visuelles Feedback für Auswahl (Style-Erhalt)
-            document.querySelectorAll('.watchlist-item').forEach(el => el.style.background = 'transparent');
-            div.style.background = 'rgba(255,255,255,0.05)';
+            document.querySelectorAll('.watchlist-item').forEach(el => el.classList.remove('active'));
+            div.classList.add('active');
         });
 
-        // Löschen-Button
         const deleteBtn = document.createElement('ion-icon');
         deleteBtn.setAttribute('name', 'trash-outline');
-        deleteBtn.style.color = '#ff5252';
-        deleteBtn.style.fontSize = '1.2em';
+        deleteBtn.className = 'delete-btn-icon';
 
         deleteBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -123,6 +108,10 @@ window.StockMaster.WatchlistModule = (() => {
                     if (window.StockMaster.Events) {
                         document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_REMOVED, { 
                             detail: { symbol: item.symbol } 
+                        }));
+
+                        document.dispatchEvent(new CustomEvent(window.StockMaster.Events.GLOBAL_NOTIFICATION, {
+                            detail: { type: 'info', message: `${item.symbol} entfernt.` }
                         }));
                     }
                     await loadData();

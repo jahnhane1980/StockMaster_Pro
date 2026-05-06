@@ -3,7 +3,6 @@
 window.StockMaster = window.StockMaster || {};
 window.StockMaster.IntelligenceModule = (() => {
 
-    // DOM Elemente (wie in deiner index.html definiert)
     const boardPanel = document.getElementById('intelligence-board');
     const emptyStatePanel = document.getElementById('empty-state');
     const boardTickerName = document.getElementById('board-ticker-name');
@@ -17,7 +16,6 @@ window.StockMaster.IntelligenceModule = (() => {
 
     const init = () => {
         if (window.StockMaster.Events) {
-            // Lauscht auf die Auswahl eines Tickers in der Watchlist
             document.addEventListener(window.StockMaster.Events.TICKER_SELECTED, handleTickerSelected);
             console.log('[IntelligenceModule] Initialisiert.');
         }
@@ -27,21 +25,16 @@ window.StockMaster.IntelligenceModule = (() => {
         const symbol = event.detail?.symbol;
         if (!symbol) return;
 
-        // UI in Lade-Zustand versetzen
-        if (boardPanel) boardPanel.style.display = 'none';
+        if (boardPanel) boardPanel.classList.add('hidden');
         if (emptyStatePanel) {
-            emptyStatePanel.style.display = 'block';
+            emptyStatePanel.classList.remove('hidden');
             emptyStatePanel.textContent = `Lade Intelligence-Daten für ${symbol}...`;
         }
 
         try {
-            // Daten vom Backend holen
             const data = await window.backendService.getIntelligenceData(symbol);
-            
-            // UI aktualisieren (Board füllen)
             updateUI(data);
 
-            // NEU: Den Chart über das Event-System informieren und die Historie übergeben
             if (window.StockMaster.Events) {
                 document.dispatchEvent(new CustomEvent(window.StockMaster.Events.CHART_DATA_READY, { 
                     detail: { 
@@ -61,7 +54,6 @@ window.StockMaster.IntelligenceModule = (() => {
                     : 'Fehler beim Laden der Daten.';
             }
 
-            // Notification senden
             if (window.StockMaster.Events) {
                 document.dispatchEvent(new CustomEvent(window.StockMaster.Events.GLOBAL_NOTIFICATION, {
                     detail: {
@@ -74,25 +66,21 @@ window.StockMaster.IntelligenceModule = (() => {
     };
 
     const updateUI = (data) => {
-        if (emptyStatePanel) emptyStatePanel.style.display = 'none';
-        if (boardPanel) boardPanel.style.display = 'block';
+        if (emptyStatePanel) emptyStatePanel.classList.add('hidden');
+        if (boardPanel) boardPanel.classList.remove('hidden');
 
         if (boardTickerName) boardTickerName.textContent = data.ticker;
         
-        // Preis-Formatierung
         if (boardPrice) {
             boardPrice.textContent = data.currentPrice ? `$${data.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
         }
         
-        // Change-Anzeige mit Farbcodierung (Style-Erhalt)
         if (boardChange) {
             const changeVal = data.change || 0;
             boardChange.textContent = `${changeVal > 0 ? '+' : ''}${changeVal.toFixed(2)}%`;
-            boardChange.style.color = changeVal >= 0 ? '#00e676' : '#ff5252'; 
-            boardChange.style.marginLeft = '10px';
+            boardChange.className = changeVal >= 0 ? 'positive' : 'negative'; 
         }
 
-        // Fundamentals (Metadaten aus der DB)
         if (data.fundamentals) {
             if (valMcap) valMcap.textContent = data.fundamentals.market_cap ? formatLargeNumber(data.fundamentals.market_cap) : 'N/A';
             if (valDebt) valDebt.textContent = data.fundamentals.debt_equity ? data.fundamentals.debt_equity.toFixed(2) : 'N/A';
@@ -101,7 +89,6 @@ window.StockMaster.IntelligenceModule = (() => {
             [valMcap, valDebt, valRev].forEach(el => { if(el) el.textContent = 'N/A'; });
         }
 
-        // Sentiment-Anzeige (News Scores)
         if (data.sentiment && data.sentiment.length > 0) {
             const latestScore = data.sentiment[0].sentiment_score; 
             if (sentimentText) {
