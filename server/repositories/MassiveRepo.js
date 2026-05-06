@@ -56,6 +56,21 @@ class MassiveRepo {
     console.log(`[MassiveRepo] Queueing Intraday Data for ${ticker} (P1)`);
     return requestManager.enqueue('P1', this.providerName, task);
   }
+
+  /**
+   * Holt historische Tagesdaten für einen bestimmten Zeitraum (Prio: P2)
+   * Wird genutzt, um die Lücke zwischen dem letzten DB-Eintrag und heute zu füllen.
+   */
+  async getHistoricalData(ticker, fromDate, toDate) {
+    const task = () => this._fetchFromAPI(`/stocks/${ticker}/history`, {
+      from: fromDate,
+      to: toDate,
+      interval: '1d'
+    });
+
+    console.log(`[MassiveRepo] Queueing History Diff for ${ticker} (${fromDate} to ${toDate}) (P2)`);
+    return requestManager.enqueue('P2', this.providerName, task);
+  }
 }
 
 module.exports = new MassiveRepo();

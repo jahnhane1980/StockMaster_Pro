@@ -1,7 +1,8 @@
 // server/controllers/watchlistController.js
-const db = require('../database');
-const alphaVantageRepo = require('../repositories/AlphaVantageRepo');
+const { db } = require('../database');
+const TickerRepository = require('../repositories/tickerRepository');
 const stockService = require('../services/StockService');
+const alphaVantageRepo = require('../repositories/AlphaVantageRepo');
 
 class WatchlistController {
   
@@ -18,72 +19,56 @@ class WatchlistController {
 
     const ticker = symbol.toUpperCase();
 
-    // 1. Ticker in der Datenbank speichern (in der "tickers" Tabelle)
-    db.run(
-      `INSERT INTO tickers (symbol, name) VALUES (?, ?) ON CONFLICT(symbol) DO NOTHING`,
-      [ticker, name || ''],
-      function(err) {
-        if (err) {
-          console.error('[WatchlistController] DB Fehler:', err);
-          return res.status(500).json({ error: 'Datenbankfehler beim Speichern.' });
-        }
+    try {
+      // 1. Ticker in der Datenbank speichern
+      TickerRepository.upsertTicker({ 
+        symbol: ticker, 
+        name: name || '' 
+      });
 
-        // 2. Hintergrund-Jobs an den RequestManager übergeben!
-        // Wir warten hier NICHT mit 'await', weil der User sofort ein Feedback 
-        // im UI haben soll ("Ticker hinzugefügt"). Die Daten laden im Hintergrund.
-        
-        console.log(`[WatchlistController] Ticker ${ticker} hinzugefügt. Starte Hintergrund-Sync...`);
-        
-        // P2: Historie (Wichtig für den Chart)
-        alphaVantageRepo.getDailyHistory(ticker)
-          .then(rawData => {
-            // Hier müssten die Daten über eine DB-Klasse gespeichert werden
-            console.log(`[Background] Historie für ${ticker} geladen und wird gespeichert.`);
-            // db.run("INSERT INTO historical_data ...")
-          })
-          .catch(e => console.error(`[Background] Fehler Historie ${ticker}:`, e.message));
+      console.log(`[WatchlistController] Ticker ${ticker} hinzugefügt. Starte Hintergrund-Sync...`);
+      
+      // 2. Hintergrund-Jobs (ohne await, um UI nicht zu blockieren)
+      // Wir rufen hier Methoden auf, die den RequestManager nutzen
+      
+      // Historie & Fundamentals im Hintergrund anstoßen
+      // Hinweis: StockService.getIntelligenceData macht das eigentlich auch beim ersten Aufruf,
+      // aber hier triggern wir es proaktiv.
+      alphaVantageRepo.getDailyHistory(ticker).catch(e => console.error(`[Background] Fehler Historie ${ticker}:`, e.message));
+      alphaVantageRepo.getFundamentalsOverview(ticker).catch(e => console.error(`[Background] Fehler Fundamentals ${ticker}:`, e.message));
+      alphaVantageRepo.getNewsSentiment(ticker).catch(e => console.error(`[Background] Fehler Sentiment ${ticker}:`, e.message));
 
-        // P3: Fundamentals (Niedrige Prio)
-        alphaVantageRepo.getFundamentalsOverview(ticker)
-          .then(rawData => console.log(`[Background] Fundamentals für ${ticker} geladen.`))
-          .catch(e => console.error(`[Background] Fehler Fundamentals ${ticker}:`, e.message));
-
-        // P3: Sentiment (Niedrige Prio)
-        alphaVantageRepo.getNewsSentiment(ticker)
-          .then(rawData => console.log(`[Background] Sentiment für ${ticker} geladen.`))
-          .catch(e => console.error(`[Background] Fehler Sentiment ${ticker}:`, e.message));
-
-        // Antwort an das Frontend
-        return res.status(200).json({ 
-          message: `${ticker} zur Watchlist hinzugefügt. Daten werden im Hintergrund synchronisiert.` 
-        });
-      }
-    );
+      // Antwort an das Frontend
+      return res.status(200).json({ 
+        success: true,
+        message: `${ticker} zur Watchlist hinzugefügt. Daten werden im Hintergrund synchronisiert.` 
+      });
+    } catch (err) {
+      console.error('[WatchlistController] Fehler beim Hinzufügen:', err.message);
+      return res.status(500).json({ error: 'Interner Serverfehler beim Speichern des Tickers.' });
+    }
   }
 
   /**
-   * Wird aufgerufen, wenn du im Frontend auf eine Aktie klickst, um das Board zu öffnen
+   * Wird aufgerufen, wenn im Frontend auf eine Aktie geklickt wird
    * GET /api/intelligence/:ticker
    */
   async getIntelligenceBoard(req, res) {
     const ticker = req.params.ticker.toUpperCase();
 
     try {
-      // Hier rufen wir den StockService aus Schritt 4 auf!
-      // Er prüft die DB, holt P1-Livedaten von Massive und harmonisiert alles.
       const intelligenceData = await stockService.getIntelligenceData(ticker);
-      
       return res.status(200).json(intelligenceData);
     } catch (error) {
-      if (error.message === 'MASSIVE_LIMIT_REACHED' || error.message === 'AV_DAILY_LIMIT_REACHED') {
+      if (error.message.includes('Limit Reached') || error.message.includes('429')) {
         return res.status(429).json({ 
           error: 'Provider Limit erreicht.', 
           details: 'Daten können aktuell nicht vollständig geladen werden. Bitte später erneut versuchen.' 
         });
       }
       
-      console.error('[WatchlistController] Fehler Board:', error);
-      return res.status(500).json({ error: 'Interner Serverfehler.' });
+      console.error('[WatchlistController] Fehler Board:', error.message);
+      return res.status(500).json({ error: 'Interner Serverfehler beim Laden der Board-Daten.' });
     }
   }
 }

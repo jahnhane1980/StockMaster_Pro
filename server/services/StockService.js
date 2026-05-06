@@ -57,16 +57,36 @@ class StockService {
       // 4. SENTIMENT (Die im Hintergrund geladenen Scores aus der DB holen)
       const sentimentHistory = await intelligenceDAO.getLatestSentiment(ticker, 5);
 
+      // 5. KORRELATIONEN (Basiswerte wie BTC, Gold etc.)
+      const correlations = await intelligenceDAO.getCorrelations(ticker);
+      const linkedData = [];
 
-      // 5. DATEN FÜRS FRONTEND ZUSAMMENBAUEN (DTO)
+      if (correlations && correlations.length > 0) {
+          for (const corr of correlations) {
+              try {
+                  const linkedQuote = await massiveRepo.getRealtimeQuote(corr.linked_ticker);
+                  linkedData.push({
+                      symbol: corr.linked_ticker,
+                      price: linkedQuote.price,
+                      change: linkedQuote.change,
+                      correlation_score: corr.correlation_score
+                  });
+              } catch (err) {
+                  console.warn(`[StockService] Konnte Korrelations-Daten für ${corr.linked_ticker} nicht laden:`, err.message);
+              }
+          }
+      }
+
+      // 6. DATEN FÜRS FRONTEND ZUSAMMENBAUEN (DTO)
       return {
         ticker: ticker.toUpperCase(),
-        currentPrice: realtimeData.price, // An Massive JSON-Struktur anpassen
+        currentPrice: realtimeData.price, 
         change: realtimeData.change,
         lastUpdated: new Date().toISOString(),
         fundamentals: metadata,
         sentiment: sentimentHistory,
-        history: finalHistory
+        history: finalHistory,
+        correlations: linkedData
       };
 
     } catch (error) {
@@ -109,12 +129,11 @@ class StockService {
    * Harmonisiert die Massive Historie
    */
   _mapMassiveHistory(rawData) {
-    // ACHTUNG: Dies ist ein Platzhalter! 
-    // Du musst hier die genauen Feldnamen der Massive API eintragen.
+    // Massive API Mapping: Wir erwarten hier das Format von Massive
     if (!rawData || !rawData.data) return [];
 
     return rawData.data.map(item => ({
-      date: item.date, // z.B. '2024-05-15'
+      date: item.date, 
       open: item.open,
       high: item.high,
       low: item.low,

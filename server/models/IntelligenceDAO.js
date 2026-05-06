@@ -99,6 +99,18 @@ class IntelligenceDAO {
     const result = stmt.run(mainTicker, linkedTicker, score);
     return result.lastInsertRowid;
   }
+
+  /**
+   * Holt alle verknüpften Basiswerte für einen Ticker (z.B. BTC für MARA)
+   */
+  getCorrelations(mainTicker) {
+    const stmt = db.prepare(`
+      SELECT linked_ticker, correlation_score 
+      FROM asset_correlations 
+      WHERE main_ticker = ?
+    `);
+    return stmt.all(mainTicker);
+  }
 }
 
 module.exports = new IntelligenceDAO();
