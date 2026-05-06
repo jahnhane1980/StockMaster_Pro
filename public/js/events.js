@@ -10,8 +10,11 @@ window.StockMaster.Events = {
     
     // Watchlist Events
     TICKER_ADDED: 'watchlist:ticker-added',
-    TICKER_REMOVED: 'watchlist:ticker-removed', // NEU: Event fürs Löschen
-    TICKER_SELECTED: 'watchlist:ticker-selected'
+    TICKER_REMOVED: 'watchlist:ticker-removed', 
+    TICKER_SELECTED: 'watchlist:ticker-selected',
+
+    // NEU: Damit das Intelligence Board den Chart triggern kann
+    CHART_DATA_READY: 'chart:data-ready' 
 };
 
 // Schützt das Wörterbuch davor, zur Laufzeit verändert zu werden

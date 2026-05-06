@@ -22,6 +22,14 @@
     <!-- Header Bereich -->
     <header id="main-header">
         <div class="logo">StockMaster</div>
+        
+        <!-- NEU: Suchfeld & Button hinzugefügt, damit wir Ticker anlegen können -->
+        <div class="search-container" style="display: flex; gap: 10px; align-items: center;">
+            <input type="text" id="ticker-search" placeholder="Ticker (z.B. MARA)..." style="padding: 5px; border-radius: 4px;">
+            <button id="add-ticker-btn" style="padding: 5px 10px; cursor: pointer;">Hinzufügen</button>
+            <span id="status-message" style="color: #ff9800; font-size: 0.8em;"></span>
+        </div>
+
         <div class="settings-icon">
             <ion-icon name="settings-sharp"></ion-icon>
         </div>
@@ -30,16 +38,44 @@
     <!-- Hauptbereich -->
     <main id="app-container">
         <section class="content-column">
+            <!-- WICHTIG: Deine ID chart-container bleibt! Das JS nutzt einfach diese ID. -->
             <div id="chart-container" class="card" style="min-height: 500px;">
                 <!-- Hier malt das Modul gleich automatisch rein -->
             </div>            
             
-            <div id="details-container">
-                <h2>Details zum Ticker</h2>
+            <div id="details-container" class="card">
+                <!-- NEU: IDs hinzugefügt, um die Daten aus dem Backend reinzuschreiben -->
+                <h2 id="board-ticker-name">Details zum Ticker</h2>
+                
+                <div id="empty-state">Bitte wähle eine Aktie aus der Watchlist.</div>
+                
+                <div id="intelligence-board" style="display: none;">
+                    <div>
+                        <span id="board-price" style="font-size: 1.5em; font-weight: bold;">--</span>
+                        <span id="board-change">--</span>
+                    </div>
+                    
+                    <div style="margin-top: 15px;">
+                        <h3>Fundamentals</h3>
+                        <p>Market Cap: <span id="val-mcap">--</span></p>
+                        <p>Debt/Equity: <span id="val-debt">--</span></p>
+                        <p>Rev. Growth: <span id="val-rev">--</span></p>
+                    </div>
+
+                    <div style="margin-top: 15px;">
+                        <h3>Sentiment (News)</h3>
+                        <p id="sentiment-text">Lädt...</p>
+                        <!-- Simpler Balken für das JS -->
+                        <div style="width: 100%; height: 5px; background: #444; position: relative; margin-top: 5px;">
+                            <div id="sentiment-indicator" style="width: 5px; height: 10px; background: white; position: absolute; top: -2px; left: 50%;"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
         <aside class="watchlist-column">
+            <!-- WICHTIG: Hier rendert dein JS (js/modules/watchlist.js) die Liste rein -->
             <div id="watchlist-container" class="card"></div>
         </aside>
     </main>
@@ -58,8 +94,9 @@
 
     <!-- 2. Services -->
     <script src="js/services/notificationService.js"></script>
-    <script src="js/services/finnhubService.js"></script>
-    <script src="js/services/fmpService.js"></script>
+    <!-- GELÖSCHT: finnhubService.js und fmpService.js, da wir sie nicht mehr brauchen -->
+    <!-- NEU: Hier kommt unser neuer Backend-Service rein -->
+    <script src="js/services/backendService.js"></script>
 
     <!-- 3. Repositories (Datenbank-Schicht) -->
     <script src="js/repositories/tickerRepository.js"></script>

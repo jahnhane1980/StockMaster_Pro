@@ -1,9 +1,8 @@
 // server/services/StockService.js
 const alphaVantageRepo = require('../repositories/AlphaVantageRepo');
 const massiveRepo = require('../repositories/MassiveRepo');
-
-// HINWEIS: Hier würdest du deine echten Datenbank-Modelle importieren
-// const Stock = require('../models/Stock'); 
+const historicalDataDAO = require('../models/HistoricalDataDAO');
+const intelligenceDAO = require('../models/IntelligenceDAO');
 
 class StockService {
   
@@ -16,81 +15,89 @@ class StockService {
       console.log(`[StockService] Lade Intelligence-Daten für: ${ticker}`);
 
       // 1. ECHTZEIT-DATEN HOLEN (Massive - Prio 1)
-      // Das wollen wir immer frisch haben, wenn das Board geöffnet wird.
       const realtimeData = await massiveRepo.getRealtimeQuote(ticker);
 
-      // 2. DATENBANK-CHECK FÜR HISTORIE & FUNDAMENTALS
-      // let dbRecord = await Stock.findOne({ ticker });
-      let dbRecord = null; // Platzhalter: Tun wir so, als ob die DB noch leer ist
+      // 2. HISTORISCHE DATEN (Hybrid-Logik: AV vs. Massive)
+      const lastRecordDate = await historicalDataDAO.getLastRecordDate(ticker);
+      const todayStr = new Date().toISOString().split('T')[0];
 
-      let historicalData = [];
-      let fundamentals = {};
-
-      if (!dbRecord || this._isDataStale(dbRecord.lastUpdated)) {
-        // Daten fehlen oder sind zu alt -> Alpha Vantage fragen (Prio 2 & 3)
-        console.log(`[StockService] Daten für ${ticker} fehlen/veraltet. Hole von AV...`);
-
-        // Wir feuern die Requests parallel ab, der RequestManager sortiert sie nach Prio!
-        const [historyRaw, fundamentalsRaw] = await Promise.all([
-          alphaVantageRepo.getDailyHistory(ticker),         // P2
-          alphaVantageRepo.getFundamentalsOverview(ticker)  // P3
-        ]);
-
-        // Rohdaten harmonisieren
-        historicalData = this._mapAlphaVantageHistory(historyRaw);
-        fundamentals = this._mapAlphaVantageFundamentals(fundamentalsRaw);
-
-        // 3. DATENBANK UPDATEN
-        // await Stock.findOneAndUpdate(
-        //   { ticker }, 
-        //   { history: historicalData, fundamentals, lastUpdated: new Date() },
-        //   { upsert: true }
-        // );
-      } else {
-        // Wir haben frische Daten in der DB! Spart uns wertvolle API-Requests.
-        console.log(`[StockService] Lade Historie & Fundamentals für ${ticker} aus der DB.`);
-        historicalData = dbRecord.history;
-        fundamentals = dbRecord.fundamentals;
+      if (!lastRecordDate) {
+        // Fall A: Keine Daten vorhanden -> Initiale Betankung (5 Jahre) über Alpha Vantage
+        console.log(`[StockService] Keine Historie für ${ticker}. Hole 5 Jahre von AV...`);
+        const historyRaw = await alphaVantageRepo.getDailyHistory(ticker);
+        const mappedHistory = this._mapAlphaVantageHistory(historyRaw);
+        await historicalDataDAO.insertMany(ticker, mappedHistory, 'AV');
+        
+      } else if (lastRecordDate < todayStr) {
+        // Fall B: Daten vorhanden, aber Lücke -> Update über Massive
+        console.log(`[StockService] Historie für ${ticker} veraltet (Stand: ${lastRecordDate}). Hole Diffs von Massive...`);
+        // Beachte: Massive Repo muss den Zeitraum von lastRecordDate bis heute abfragen
+        const historyRaw = await massiveRepo.getHistoricalData(ticker, lastRecordDate, todayStr);
+        const mappedHistory = this._mapMassiveHistory(historyRaw);
+        await historicalDataDAO.insertMany(ticker, mappedHistory, 'MASSIVE');
       }
 
-      // 4. DATEN FÜRS FRONTEND ZUSAMMENBAUEN (DTO - Data Transfer Object)
+      // Lade die nun vollständige Historie aus unserer SQLite-Datenbank für das Chart
+      const finalHistory = await historicalDataDAO.getHistoryForChart(ticker);
+
+
+      // 3. FUNDAMENTALDATEN HOLEN & UPDATEN
+      let metadata = await intelligenceDAO.getMetadata(ticker);
+      
+      if (!metadata || this._isDataStale(metadata.last_updated_fundamentals, 30)) {
+        // Fundamentaldaten fehlen oder sind älter als 30 Tage -> AV fragen
+        console.log(`[StockService] Fundamentals für ${ticker} veraltet. Hole von AV...`);
+        const fundamentalsRaw = await alphaVantageRepo.getFundamentalsOverview(ticker);
+        const mappedFundamentals = this._mapAlphaVantageFundamentals(fundamentalsRaw);
+        
+        await intelligenceDAO.upsertMetadata(ticker, mappedFundamentals);
+        metadata = await intelligenceDAO.getMetadata(ticker); // Frisch aus der DB laden
+      }
+
+      // 4. SENTIMENT (Die im Hintergrund geladenen Scores aus der DB holen)
+      const sentimentHistory = await intelligenceDAO.getLatestSentiment(ticker, 5);
+
+
+      // 5. DATEN FÜRS FRONTEND ZUSAMMENBAUEN (DTO)
       return {
         ticker: ticker.toUpperCase(),
-        currentPrice: realtimeData.price, // Je nach Massive-JSON Struktur anpassen
+        currentPrice: realtimeData.price, // An Massive JSON-Struktur anpassen
         change: realtimeData.change,
         lastUpdated: new Date().toISOString(),
-        fundamentals: fundamentals,
-        history: historicalData
+        fundamentals: metadata,
+        sentiment: sentimentHistory,
+        history: finalHistory
       };
 
     } catch (error) {
       console.error(`[StockService] Fehler beim Laden der Daten für ${ticker}:`, error.message);
-      // Wenn wir ein 429 Limit-Error bekommen, werfen wir ihn weiter zum Controller
       throw error; 
     }
   }
 
   /**
-   * Prüft, ob die Daten in der DB älter als 24 Stunden sind.
+   * Prüft, ob die Daten in der DB älter als X Tage sind.
    */
-  _isDataStale(lastUpdated) {
+  _isDataStale(lastUpdated, days = 1) {
     if (!lastUpdated) return true;
-    const oneDay = 24 * 60 * 60 * 1000;
-    return (new Date() - new Date(lastUpdated)) > oneDay;
+    const timeLimit = days * 24 * 60 * 60 * 1000;
+    return (new Date() - new Date(lastUpdated)) > timeLimit;
   }
 
   /**
-   * Harmonisiert die Alpha Vantage Historie in ein sauberes Array
+   * Harmonisiert die Alpha Vantage Historie
    */
   _mapAlphaVantageHistory(rawData) {
     const timeSeries = rawData['Time Series (Daily)'];
     if (!timeSeries) return [];
 
-    // Mappt das wilde AV-Objekt in ein sauberes Array: [{ date, close, volume }, ...]
-    return Object.keys(timeSeries).slice(0, 1250).map(date => { // Max 5 Jahre (ca. 1250 Handelstage)
+    return Object.keys(timeSeries).slice(0, 1250).map(date => { 
       const dayData = timeSeries[date];
       return {
         date: date,
+        open: parseFloat(dayData['1. open']),
+        high: parseFloat(dayData['2. high']),
+        low: parseFloat(dayData['3. low']),
         close: parseFloat(dayData['4. close']),
         adjustedClose: parseFloat(dayData['5. adjusted close']),
         volume: parseInt(dayData['6. volume'], 10)
@@ -99,16 +106,34 @@ class StockService {
   }
 
   /**
+   * Harmonisiert die Massive Historie
+   */
+  _mapMassiveHistory(rawData) {
+    // ACHTUNG: Dies ist ein Platzhalter! 
+    // Du musst hier die genauen Feldnamen der Massive API eintragen.
+    if (!rawData || !rawData.data) return [];
+
+    return rawData.data.map(item => ({
+      date: item.date, // z.B. '2024-05-15'
+      open: item.open,
+      high: item.high,
+      low: item.low,
+      close: item.close,
+      volume: item.volume,
+      vwap: item.vwap || null
+    }));
+  }
+
+  /**
    * Harmonisiert die Alpha Vantage Fundamentaldaten
    */
   _mapAlphaVantageFundamentals(rawData) {
     if (!rawData || !rawData.Symbol) return {};
     return {
-      marketCap: rawData.MarketCapitalization,
-      peRatio: rawData.PERatio,
-      eps: rawData.EPS,
-      sector: rawData.Sector,
-      industry: rawData.Industry
+      asset_type: rawData.AssetType || 'STOCK',
+      market_cap: rawData.MarketCapitalization,
+      debt_equity: rawData.DebtToEquity || null,
+      revenue_growth: rawData.QuarterlyRevenueGrowthYOY || null
     };
   }
 }

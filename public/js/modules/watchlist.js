@@ -1,157 +1,121 @@
-/**
- * StockMaster Watchlist Modul
- * Fokus: Intelligente Ticker-Typ Erkennung
- */
+// public/js/modules/watchlist.js
+
 window.StockMaster = window.StockMaster || {};
+window.StockMaster.WatchlistModule = (() => {
 
-window.StockMaster.Watchlist = (function() {
-    const containerId = 'watchlist-container';
-    let watchedTickers = [];
-    let currentMatches = []; 
-    let searchTimeout = null;
+    const searchInput = document.getElementById('ticker-search');
+    const addBtn = document.getElementById('add-ticker-btn');
+    const watchlistContainer = document.getElementById('watchlist-container');
 
-    async function init() {
-        renderBase();
-        bindEvents();
-        try { await loadData(); } catch (e) { console.error(e); }
-    }
-
-    async function loadData() {
-        const repo = window.StockMaster.TickerRepository;
-        if (repo && typeof repo.getAllTickers === 'function') {
-            watchedTickers = await repo.getAllTickers() || [];
-            renderList();
+    const init = async () => {
+        if (addBtn) addBtn.addEventListener('click', handleAddTicker);
+        
+        if (searchInput) {
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleAddTicker();
+            });
         }
-    }
 
-    function renderBase() {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        container.innerHTML = `
-            <h2>Watchlist</h2>
-            <div class="watchlist-actions" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: flex-start;">
-                <div style="position: relative; flex-grow: 1;">
-                    <input type="text" id="new-ticker-input" class="font-mono" autocomplete="off" placeholder="Symbol (z.B. AAPL)" style="width: 100%;">
-                    <div id="ticker-error" style="color: var(--error); font-size: 0.8rem; margin-top: 0.25rem; display: none;"></div>
-                    <div id="autocomplete-list" class="autocomplete-dropdown"></div>
-                </div>
-                <button id="add-ticker-btn" style="padding: 0.5rem 1rem; background: var(--primary); color: var(--surface); border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; height: 38px;">
-                    <ion-icon name="add-outline"></ion-icon>
-                </button>
-            </div>
-            <ul id="watchlist-items"></ul>
-        `;
-    }
+        // Initiales Laden der Watchlist aus deiner lokalen Datenbank/Repository
+        await loadData();
+    };
 
-    function renderList() {
-        const listEl = document.getElementById('watchlist-items');
-        if (!listEl) return;
-        listEl.innerHTML = ''; 
-        if (watchedTickers.length === 0) {
-            listEl.innerHTML = `<li><i style="color: var(--placeholder);">Watchlist ist leer.</i></li>`;
-            return;
+    const loadData = async () => {
+        if (window.StockMaster.TickerRepository && watchlistContainer) {
+            const tickers = await window.StockMaster.TickerRepository.getAllTickers();
+            watchlistContainer.innerHTML = ''; // Container leeren
+            
+            // Jeden Ticker einzeln rendern
+            tickers.forEach(tickerObj => renderTicker(tickerObj));
         }
-        const sorted = [...watchedTickers].sort((a, b) => (b.last_updated || 0) - (a.last_updated || 0));
-        sorted.forEach(item => {
-            const li = document.createElement('li');
-            li.className = 'watchlist-item-row';
-            li.innerHTML = `
-                <span class="font-mono" style="font-weight: 600;">${item.symbol}</span>
-                <div class="watchlist-item-right">
-                    <span class="delete-action" title="Ticker entfernen">
-                        <ion-icon name="trash-outline"></ion-icon>
-                    </span>
-                </div>
-            `;
-            li.addEventListener('click', () => {
+    };
+
+    const handleAddTicker = async () => {
+        const symbol = searchInput.value.toUpperCase().trim();
+        if (!symbol) return;
+
+        try {
+            // ==========================================
+            // NEU: Hier rufen wir unser neues Backend auf!
+            // ==========================================
+            await window.backendService.addTickerToWatchlist(symbol);
+
+            // ==========================================
+            // DEINE BESTEHENDE LOGIK: Speichern & Event feuern
+            // ==========================================
+            if (window.StockMaster.TickerRepository) {
+                await window.StockMaster.TickerRepository.addTicker({ symbol: symbol });
+            }
+
+            if (window.StockMaster.Events) {
+                document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_ADDED, { 
+                    detail: { symbol: symbol } 
+                }));
+                
+                document.dispatchEvent(new CustomEvent(window.StockMaster.Events.GLOBAL_NOTIFICATION, {
+                    detail: { type: 'success', message: `${symbol} zur Watchlist hinzugefügt.` }
+                }));
+            }
+
+            searchInput.value = '';
+            await loadData(); // Liste neu aufbauen
+
+        } catch (error) {
+            console.error('[Watchlist] Fehler beim Hinzufügen:', error);
+            if (window.StockMaster.Events) {
+                document.dispatchEvent(new CustomEvent(window.StockMaster.Events.GLOBAL_NOTIFICATION, {
+                    detail: { type: 'error', message: error.message || 'Fehler beim Hinzufügen.' }
+                }));
+            }
+        }
+    };
+
+    const renderTicker = (item) => {
+        const div = document.createElement('div');
+        div.className = 'watchlist-item'; 
+        div.textContent = item.symbol;
+
+        // -----------------------------------------------------
+        // DEIN SNIPPET 1: Ticker auswählen -> Intelligence Board
+        // -----------------------------------------------------
+        div.addEventListener('click', () => {
+            if (window.StockMaster.Events) {
+                document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_SELECTED, { 
+                    detail: { symbol: item.symbol } 
+                }));
+            }
+        });
+
+        // -----------------------------------------------------
+        // DEIN SNIPPET 2: Ticker löschen
+        // -----------------------------------------------------
+        const deleteBtn = document.createElement('span');
+        deleteBtn.innerHTML = ' &times;'; // Simples X Icon
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.style.cursor = 'pointer';
+        deleteBtn.style.float = 'right';
+
+        deleteBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (window.StockMaster.TickerRepository) {
+                await window.StockMaster.TickerRepository.deleteTicker(item.symbol);
+                
                 if (window.StockMaster.Events) {
-                    document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_SELECTED, { 
+                    document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_REMOVED, { 
                         detail: { symbol: item.symbol } 
                     }));
                 }
-            });
-            const deleteBtn = li.querySelector('.delete-action');
-            deleteBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (window.StockMaster.TickerRepository) {
-                    await window.StockMaster.TickerRepository.deleteTicker(item.symbol);
-                    await loadData();
-                }
-            });
-            listEl.appendChild(li);
-        });
-    }
-
-    function bindEvents() {
-        const input = document.getElementById('new-ticker-input');
-        const addBtn = document.getElementById('add-ticker-btn');
-        const autocompleteList = document.getElementById('autocomplete-list');
-
-        addBtn.onclick = async function() {
-            const symbol = input.value.trim().toUpperCase();
-            if (!symbol) return;
-
-            try {
-                const match = currentMatches.find(m => m.symbol === symbol);
-                const name = match ? match.description : symbol;
-                
-                // --- VERBESSERTE TYP-ERKENNUNG ---
-                let type = 'stock';
-                const lowerName = name.toLowerCase();
-                const apiType = match ? (match.type || '').toUpperCase() : '';
-
-                if (apiType === 'ETP' || apiType === 'ETF' || 
-                    lowerName.includes('ucits') || 
-                    lowerName.includes('etf') || 
-                    lowerName.includes('fund')) {
-                    type = 'etf';
-                }
-
-                await window.StockMaster.TickerRepository.addTicker({
-                    symbol: symbol,
-                    name: name,
-                    type: type,
-                    last_updated: Date.now()
-                });
-
-                input.value = '';
-                autocompleteList.style.display = 'none';
-                await loadData(); 
-
-            } catch (err) {
-                console.error("❌ Fehler:", err);
+                await loadData();
             }
-        };
-
-        input.addEventListener('input', function() {
-            const val = this.value.trim().toUpperCase();
-            clearTimeout(searchTimeout);
-            if (!val) { autocompleteList.style.display = 'none'; return; }
-            searchTimeout = setTimeout(async () => {
-                const finnhub = window.StockMaster.FinnhubService;
-                if (finnhub) {
-                    currentMatches = await finnhub.searchTicker(val) || [];
-                    if (currentMatches.length > 0) {
-                        autocompleteList.innerHTML = '';
-                        autocompleteList.style.display = 'block';
-                        currentMatches.slice(0, 8).forEach(match => {
-                            const d = document.createElement('div');
-                            d.className = 'autocomplete-item';
-                            d.innerHTML = `<span class="font-mono">${match.symbol}</span> <small>${match.description}</small>`;
-                            d.onmousedown = () => { 
-                                input.value = match.symbol;
-                                autocompleteList.style.display = 'none';
-                            };
-                            autocompleteList.appendChild(d);
-                        });
-                    }
-                }
-            }, 400);
         });
 
-        input.onblur = () => { setTimeout(() => { autocompleteList.style.display = 'none'; }, 200); };
-        input.onkeypress = (e) => { if (e.key === 'Enter') addBtn.click(); };
-    }
+        div.appendChild(deleteBtn);
+        watchlistContainer.appendChild(div);
+    };
 
-    return { init, refresh: loadData };
+    return { init, loadData };
 })();
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.StockMaster.WatchlistModule.init();
+});

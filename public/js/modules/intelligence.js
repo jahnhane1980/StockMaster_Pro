@@ -1,114 +1,116 @@
-/**
- * StockMaster Intelligence Modul
- * Zuständig für Fundamentals, Sentiment und Daten-Caching
- */
+// public/js/modules/intelligence.js
+
 window.StockMaster = window.StockMaster || {};
+window.StockMaster.IntelligenceModule = (() => {
 
-window.StockMaster.Intelligence = (function() {
-    // Schwellenwert für Cache-Aktualisierung (24 Stunden)
-    const REFRESH_THRESHOLD = 1000 * 60 * 60 * 24; 
+    // DOM Elemente (wie in deiner index.html definiert)
+    const boardPanel = document.getElementById('intelligence-board');
+    const emptyStatePanel = document.getElementById('empty-state');
+    const boardTickerName = document.getElementById('board-ticker-name');
+    const boardPrice = document.getElementById('board-price');
+    const boardChange = document.getElementById('board-change');
+    const valMcap = document.getElementById('val-mcap');
+    const valDebt = document.getElementById('val-debt');
+    const valRev = document.getElementById('val-rev');
+    const sentimentIndicator = document.getElementById('sentiment-indicator');
+    const sentimentText = document.getElementById('sentiment-text');
 
-    /**
-     * Initialisiert das Modul
-     */
-    async function init() {
-        console.log('🧠 Intelligence: Modul initialisiert.');
-        bindEvents();
-    }
-
-    /**
-     * Bindet globale Events
-     */
-    function bindEvents() {
-        // Lauscht auf die Auswahl eines Tickers in der Watchlist
-        document.addEventListener(window.StockMaster.Events.TICKER_SELECTED, async (e) => {
-            const symbol = e.detail.symbol;
-            await loadTickerDetails(symbol);
-        });
-    }
-
-    /**
-     * Lädt Details (lokal oder von API)
-     */
-    async function loadTickerDetails(symbol) {
-        console.log(`🔍 Intelligence: Lade Details für ${symbol}...`);
-        const repo = window.StockMaster.IntelligenceRepository;
-        
-        try {
-            // 1. Versuche Daten aus der lokalen SQLite zu laden
-            const cachedData = await repo.getForSymbol(symbol);
-            
-            const now = Date.now();
-            if (cachedData && cachedData.last_updated && (now - cachedData.last_updated < REFRESH_THRESHOLD)) {
-                console.log('📦 Intelligence: Nutze Daten aus der Datenbank (Cache-Hit).');
-                render(cachedData);
-            } else {
-                console.log('🌐 Intelligence: Daten veraltet oder nicht vorhanden. Hole API-Update...');
-                await fetchAndSaveFreshData(symbol);
-            }
-        } catch (err) {
-            console.error('❌ Intelligence: Fehler beim Laden der Details:', err);
+    const init = () => {
+        if (window.StockMaster.Events) {
+            // Lauscht auf dein bestehendes Event aus der Watchlist
+            document.addEventListener(window.StockMaster.Events.TICKER_SELECTED, handleTickerSelected);
+            console.log('[IntelligenceModule] Initialisiert.');
+        } else {
+            console.error('[IntelligenceModule] window.StockMaster.Events nicht gefunden!');
         }
-    }
-
-    /**
-     * Holt frische Daten vom Finnhub Service und speichert sie
-     */
-    async function fetchAndSaveFreshData(symbol) {
-        const finnhub = window.StockMaster.FinnhubService;
-        const repo = window.StockMaster.IntelligenceRepository;
-
-        try {
-            // Abwärtskompatible Prüfung der Finnhub-Methoden
-            let fundamentals = {};
-            if (finnhub) {
-                if (typeof finnhub.getBasicFinancials === 'function') {
-                    fundamentals = await finnhub.getBasicFinancials(symbol);
-                } else if (typeof finnhub.getFundamentals === 'function') {
-                    fundamentals = await finnhub.getFundamentals(symbol);
-                }
-            }
-
-            const intelligenceData = {
-                symbol: symbol,
-                fundamentals: fundamentals,
-                sentiment_score: 50, // Standardwert oder Sentiment-Logik hier
-                dark_pool_flag: 0,
-                last_updated: Date.now()
-            };
-
-            // In der Datenbank speichern
-            await repo.save(intelligenceData);
-            
-            // UI aktualisieren
-            render(intelligenceData);
-        } catch (err) {
-            console.error('❌ Intelligence: API-Fehler beim Abrufen frischer Daten:', err);
-        }
-    }
-
-    /**
-     * Rendert die Intelligence-Ansicht
-     */
-    function render(data) {
-        const container = document.getElementById('details-container');
-        if (!container) return;
-
-        container.innerHTML = `
-            <div class="card intelligence-card">
-                <h3>Intelligence: ${data.symbol}</h3>
-                <div class="intelligence-meta" style="display: flex; gap: 20px; margin-bottom: 15px;">
-                    <span><strong>Sentiment:</strong> ${data.sentiment_score}%</span>
-                    <span><strong>Aktualisiert:</strong> ${new Date(data.last_updated).toLocaleTimeString()}</span>
-                </div>
-                <div class="fundamentals-preview" style="background: #1e1e1e; color: #00ff00; padding: 10px; border-radius: 4px; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; max-height: 300px; overflow-y: auto;">
-                    <pre>${JSON.stringify(data.fundamentals, null, 2)}</pre>
-                </div>
-            </div>
-        `;
-    }
-
-    return {
-        init: init
     };
+
+    const handleTickerSelected = async (event) => {
+        // Nutzt exakt dein bestehendes Payload-Format
+        const symbol = event.detail?.symbol;
+        if (!symbol) return;
+
+        if (boardPanel) boardPanel.style.display = 'none';
+        if (emptyStatePanel) {
+            emptyStatePanel.style.display = 'block';
+            emptyStatePanel.textContent = `Lade Intelligence-Daten für ${symbol}...`;
+        }
+
+        try {
+            // Hier kommt der einzige echte Austausch: Wir nutzen das neue Backend!
+            // (Vorher war hier der Call zu FMP/Finnhub)
+            const data = await window.backendService.getIntelligenceData(symbol);
+            
+            updateUI(data);
+
+            // ANMERKUNG: Hier müssen wir klären, wie dein chart.js die Daten bekommt.
+            // Siehe meine Frage unten!
+
+        } catch (error) {
+            console.error('[IntelligenceModule] Fehler:', error);
+            
+            if (emptyStatePanel) {
+                emptyStatePanel.textContent = 'Fehler beim Laden der Daten.';
+            }
+
+            // Nutzt dein sauberes Notification-System
+            if (window.StockMaster.Events) {
+                document.dispatchEvent(new CustomEvent(window.StockMaster.Events.GLOBAL_NOTIFICATION, {
+                    detail: {
+                        type: error.isLimitError ? 'warning' : 'error',
+                        message: error.message
+                    }
+                }));
+            }
+        }
+    };
+
+    const updateUI = (data) => {
+        if (emptyStatePanel) emptyStatePanel.style.display = 'none';
+        if (boardPanel) boardPanel.style.display = 'block';
+
+        if (boardTickerName) boardTickerName.textContent = data.ticker;
+        if (boardPrice) boardPrice.textContent = data.currentPrice ? `$${data.currentPrice.toFixed(2)}` : 'N/A';
+        
+        if (boardChange) {
+            const changeVal = data.change || 0;
+            boardChange.textContent = `${changeVal > 0 ? '+' : ''}${changeVal.toFixed(2)}%`;
+            boardChange.style.color = changeVal >= 0 ? '#00e676' : '#ff5252'; 
+        }
+
+        if (data.fundamentals) {
+            if (valMcap) valMcap.textContent = data.fundamentals.market_cap ? formatLargeNumber(data.fundamentals.market_cap) : 'N/A';
+            if (valDebt) valDebt.textContent = data.fundamentals.debt_equity ? data.fundamentals.debt_equity.toFixed(2) : 'N/A';
+            if (valRev) valRev.textContent = data.fundamentals.revenue_growth ? `${(data.fundamentals.revenue_growth * 100).toFixed(2)}%` : 'N/A';
+        }
+
+        if (data.sentiment && data.sentiment.length > 0) {
+            const latestScore = data.sentiment[0].sentiment_score; 
+            if (sentimentText) {
+                if (latestScore > 0.15) sentimentText.textContent = `Bullish (${latestScore.toFixed(2)})`;
+                else if (latestScore < -0.15) sentimentText.textContent = `Bearish (${latestScore.toFixed(2)})`;
+                else sentimentText.textContent = `Neutral (${latestScore.toFixed(2)})`;
+            }
+            if (sentimentIndicator) {
+                const positionPercent = ((latestScore + 1) / 2) * 100;
+                sentimentIndicator.style.left = `${positionPercent}%`;
+            }
+        } else {
+            if (sentimentText) sentimentText.textContent = "Keine News-Daten.";
+        }
+    };
+
+    const formatLargeNumber = (num) => {
+        if (!num) return 'N/A';
+        if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+        if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+        if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+        return num.toLocaleString();
+    };
+
+    return { init };
 })();
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.StockMaster.IntelligenceModule.init();
+});
