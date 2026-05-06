@@ -1,3 +1,17 @@
+/* --- Global Layout Base --- */
+html, body {
+    height: 100%;
+    width: 100%;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden; /* Sicherheit gegen horizontales Scrollen */
+}
+
 /* --- Header Layout --- */
 #main-header {
     display: flex;
@@ -7,6 +21,8 @@
     background-color: var(--surface);
     /* Eine dezente Linie unten, um den Header vom Grid abzugrenzen */
     border-bottom: 2px solid var(--border); 
+    flex-shrink: 0;
+    width: 100%;
 }
 
 #main-header .logo {
@@ -22,13 +38,13 @@
 
 /* --- Main Grid Layout --- */
 #app-container {
+    flex-grow: 1;
     display: grid;
-    /* 1fr für die linke Spalte (nimmt den restlichen Platz), 350px fix für die Watchlist */
-    grid-template-columns: 1fr 350px; 
+    /* minmax(0, 1fr) erlaubt es der Spalte, kleiner zu werden als ihr Inhalt */
+    grid-template-columns: minmax(0, 1fr) 350px; 
     gap: 2rem;
     padding: 2rem;
-    /* Nutzt die volle Höhe des Viewports abzüglich des Headers */
-    height: calc(100vh - 70px); 
+    min-height: 0; /* Erlaubt Flex-Items das Schrumpfen */
 }
 
 /* --- Linke Spalte (Chart & Details) --- */
@@ -37,27 +53,73 @@
     /* Chart nimmt den meisten Platz (1fr), Details passen sich an den Inhalt an (auto) */
     grid-template-rows: 1fr auto; 
     gap: 2rem;
-    height: 100%;
+    min-height: 0;
 }
 
 #chart-container {
-    height: 100%;
     min-height: 400px;
+    height: 100%;
 }
 
 /* --- Rechte Spalte (Watchlist) --- */
 .watchlist-column {
-    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 #watchlist-container {
     height: 100%;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+}
+
+.search-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+}
+
+.search-container input {
+    flex: 1;
+    min-width: 0;
+}
+
+#status-message {
+    flex-basis: 100%;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
 }
 
 #watchlist-items {
     flex-grow: 1;
     overflow-y: auto; /* Erlaubt das Scrollen, wenn die Liste zu lang wird */
-    margin-top: 1rem;
+}
+
+/* --- Responsiveness --- */
+@media (max-width: 1000px) {
+    #app-container {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+        gap: 1.5rem;
+        overflow-y: auto;
+    }
+
+    .content-column {
+        height: auto;
+        grid-template-rows: 400px auto;
+    }
+
+    .watchlist-column {
+        height: auto;
+        order: -1; /* Watchlist auf Mobile nach oben (optional) */
+        margin-bottom: 1rem;
+    }
+    
+    #watchlist-items {
+        max-height: 300px;
+    }
 }

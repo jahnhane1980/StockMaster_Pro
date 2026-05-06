@@ -22,12 +22,6 @@
     <!-- Header Bereich -->
     <header id="main-header">
         <div class="logo">StockMaster</div>
-        
-        <div class="search-container">
-            <input type="text" id="ticker-search" placeholder="Ticker (z.B. MARA)...">
-            <button id="add-ticker-btn">Hinzufügen</button>
-            <span id="status-message"></span>
-        </div>
 
         <div class="settings-icon">
             <ion-icon name="settings-sharp"></ion-icon>
@@ -71,7 +65,16 @@
         </section>
 
         <aside class="watchlist-column">
-            <div id="watchlist-container" class="card"></div>
+            <div id="watchlist-container" class="card">
+                <div class="search-container">
+                    <input type="text" id="ticker-search" placeholder="Ticker (z.B. MARA)...">
+                    <button id="add-ticker-btn" class="btn btn-icon">
+                        <ion-icon name="add"></ion-icon>
+                    </button>
+                    <span id="status-message"></span>
+                </div>
+                <div id="watchlist-items"></div>
+            </div>
         </aside>
     </main>
 

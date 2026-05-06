@@ -5,7 +5,7 @@ window.StockMaster.WatchlistModule = (() => {
 
     const searchInput = document.getElementById('ticker-search');
     const addBtn = document.getElementById('add-ticker-btn');
-    const watchlistContainer = document.getElementById('watchlist-container');
+    const watchlistContainer = document.getElementById('watchlist-items');
     const statusMsg = document.getElementById('status-message');
 
     const init = async () => {
