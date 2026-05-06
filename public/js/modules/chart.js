@@ -1,95 +1,77 @@
-// public/js/modules/chart.js
+require('dotenv').config(); 
+const express = require('express');
+const path = require('path');
+const { db, initDB } = require('./database');
 
-window.StockMaster = window.StockMaster || {};
-window.StockMaster.ChartModule = (() => {
+// Repositories
+const TickerRepository = require('./repositories/tickerRepository');
+// Alte Repositories für Chart und Intelligence wurden durch DAOs im StockService abgelöst
+
+// Services (Neues Hybrid Setup: Alpha Vantage + Massive)
+const StockService = require('./services/StockService');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const CACHE_MS = parseInt(process.env.CACHE_DURATION_MS);
+
+app.use(express.json());
+initDB();
+
+app.use(express.static(path.join(__dirname, '../public')));
+
+/**
+ * NEU: API Endpunkt für Watchlist (Triggert Hintergrund-Sync)
+ */
+app.post('/api/watchlist', (req, res) => {
+    const symbol = req.body.symbol;
+    if (!symbol) return res.status(400).json({ error: "Symbol fehlt" });
     
-    let chart = null;
-    let candleSeries = null;
-    const containerId = 'chart-container';
+    // Wir triggern den StockService, warten aber nicht auf die Antwort (Fire & Forget),
+    // damit das Frontend direkt das "OK" bekommt und nicht blockiert wird.
+    console.log(`🌐 Server: Starte Hintergrund-Sync für ${symbol}...`);
+    StockService.getIntelligenceData(symbol).catch(err => {
+        console.error(`❌ Server: Hintergrund-Sync Fehler für ${symbol}:`, err.message);
+    });
 
-    const init = () => {
-        const container = document.getElementById(containerId);
-        if (!container) {
-            console.error(`[ChartModule] Container #${containerId} nicht gefunden.`);
-            return;
-        }
+    res.json({ success: true, message: `Sync für ${symbol} gestartet.` });
+});
 
-        // 1. Chart initialisieren (Lightweight Charts)
-        chart = LightweightCharts.createChart(container, {
-            layout: { 
-                background: { type: 'solid', color: 'transparent' }, 
-                textColor: '#d1d4dc', 
-            },
-            grid: { 
-                vertLines: { color: 'rgba(43, 43, 67, 0.5)' }, 
-                horzLines: { color: 'rgba(43, 43, 67, 0.5)' }, 
-            },
-            timeScale: { 
-                timeVisible: true, 
-                secondsVisible: false, 
-            },
-            // Automatisch an die Breite und Höhe des Containers anpassen
-            width: container.clientWidth,
-            height: container.clientHeight || 500
-        });
-
-        // 2. Candlestick Serie hinzufügen
-        candleSeries = chart.addCandlestickSeries({
-            upColor: '#26a69a',
-            downColor: '#ef5350',
-            borderVisible: false,
-            wickUpColor: '#26a69a',
-            wickDownColor: '#ef5350',
-        });
-
-        // 3. Resize Observer: Passt den Chart an, wenn sich das Fenster ändert
-        new ResizeObserver(entries => {
-            if (entries.length === 0 || entries[0].target !== container) return;
-            const newRect = entries[0].contentRect;
-            chart.applyOptions({ width: newRect.width, height: newRect.height });
-        }).observe(container);
-
-        // 4. EVENT LISTENER: Auf Daten aus dem IntelligenceModule warten
-        if (window.StockMaster.Events && window.StockMaster.Events.CHART_DATA_READY) {
-            document.addEventListener(window.StockMaster.Events.CHART_DATA_READY, handleDataReady);
-            console.log('[ChartModule] Initialisiert und wartet auf Daten...');
-        } else {
-            console.error('[ChartModule] CHART_DATA_READY Event nicht in window.StockMaster.Events gefunden!');
-        }
-    };
-
-    const handleDataReady = (event) => {
-        const payload = event.detail;
-        if (!payload || !payload.history) return;
-
-        const historyData = payload.history;
-
-        // Falls die Historie leer ist, Chart bereinigen
-        if (historyData.length === 0) {
-            candleSeries.setData([]);
-            return;
-        }
-
-        // 5. Daten für Lightweight Charts formatieren
-        // Lightweight Charts erwartet { time: 'YYYY-MM-DD', open, high, low, close }
-        const chartData = historyData.map(item => ({
-            time: item.date, // Unser SQLite-Backend liefert date als 'YYYY-MM-DD'
-            open: item.open,
-            high: item.high,
-            low: item.low,
-            close: item.close
-        }));
-
-        // 6. Daten in den Chart pumpen und Ansicht einpassen
-        candleSeries.setData(chartData);
-        chart.timeScale().fitContent();
+/**
+ * NEU: API Endpunkt für Intelligence & Charts (Kombiniert, via StockService)
+ */
+app.get('/api/intelligence/:symbol', async (req, res) => {
+    const symbol = req.params.symbol;
+    try {
+        console.log(`🌐 Server: Lade aggregierte Daten für ${symbol}...`);
         
-        console.log(`[ChartModule] Chart für ${payload.ticker} mit ${chartData.length} Kerzen erfolgreich gerendert.`);
-    };
+        // Der StockService kümmert sich intern um Cache-Checks, Provider-Wahl und Limits
+        const data = await StockService.getIntelligenceData(symbol);
+        
+        res.json(data);
+    } catch (err) {
+        console.error(`❌ Server-Fehler bei Intelligence-Abruf für ${symbol}:`, err.message);
+        
+        // Limit-Error (429) an das Frontend durchreichen
+        if (err.message && err.message.includes('429')) {
+            return res.status(429).json({ 
+                error: "API-Limit erreicht. Bitte kurz warten.", 
+                details: err.message 
+            });
+        }
+        res.status(500).json({ error: "Daten-Management Fehler" });
+    }
+});
 
-    return { init };
-})();
+// Standard Ticker Endpunkte (Unverändert gelassen für dein lokales UI Repository)
+app.get('/api/tickers', (req, res) => res.json(TickerRepository.getAllTickers()));
+app.post('/api/tickers', (req, res) => res.json(TickerRepository.upsertTicker(req.body)));
+app.delete('/api/tickers/:symbol', (req, res) => {
+    TickerRepository.deleteTicker(req.params.symbol);
+    res.json({ success: true });
+});
 
-document.addEventListener('DOMContentLoaded', () => {
-    window.StockMaster.ChartModule.init();
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
+
+app.listen(PORT, () => {
+    console.log(`🚀 StockMaster Pro läuft auf http://localhost:${PORT}`);
 });
