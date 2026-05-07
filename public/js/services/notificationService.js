@@ -61,7 +61,7 @@ window.StockMaster.NotificationService = (function() {
     if (!container) return;
 
     const toast = document.createElement('div');
-    toast.className = `sm-toast ${type}`;
+    toast.className = `toast toast--${type}`;
     toast.textContent = message;
 
     container.appendChild(toast);

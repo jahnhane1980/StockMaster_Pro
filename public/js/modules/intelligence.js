@@ -100,8 +100,8 @@ window.StockMaster.IntelligenceModule = (() => {
     if (!currentData) return;
 
     // Panels umschalten: Daten vorhanden -> Board zeigen, Empty State verstecken.
-    if (emptyStatePanel) emptyStatePanel.classList.add('hidden');
-    if (boardPanel) boardPanel.classList.remove('hidden');
+    if (emptyStatePanel) emptyStatePanel.classList.add('u-hidden');
+    if (boardPanel) boardPanel.classList.remove('u-hidden');
 
     if (boardTickerName) boardTickerName.textContent = currentData.ticker;
     
@@ -114,7 +114,7 @@ window.StockMaster.IntelligenceModule = (() => {
     if (boardChange) {
       const changeVal = currentData.change || 0;
       boardChange.textContent = `${changeVal > 0 ? '+' : ''}${changeVal.toFixed(2)}%`;
-      boardChange.className = changeVal >= 0 ? 'positive' : 'negative'; 
+      boardChange.className = changeVal >= 0 ? 'u-text--positive' : 'u-text--negative'; 
     }
 
     if (currentData.fundamentals) {
@@ -159,19 +159,19 @@ window.StockMaster.IntelligenceModule = (() => {
     if (currentData.marketCorrelations) {
       const mc = currentData.marketCorrelations;
       if (mc.btc) {
-        html += `<div class="correlation-item benchmark"><span class="label">BTC:</span><span class="value">${mc.btc.correlation.toFixed(2)}</span></div>`;
+        html += `<div class="correlation correlation--benchmark"><span class="correlation__label">BTC:</span><span class="correlation__value">${mc.btc.correlation.toFixed(2)}</span></div>`;
       }
       if (mc.gold) {
-        html += `<div class="correlation-item benchmark"><span class="label">Gold:</span><span class="value">${mc.gold.correlation.toFixed(2)}</span></div>`;
+        html += `<div class="correlation correlation--benchmark"><span class="correlation__label">Gold:</span><span class="correlation__value">${mc.gold.correlation.toFixed(2)}</span></div>`;
       }
     }
 
     // Peer-Asset Korrelationen aus der Datenbank.
     if (currentData.correlations?.length > 0) {
       html += currentData.correlations.map(corr => `
-        <div class="correlation-item">
-          <span>${corr.symbol}</span>
-          <span class="${corr.change >= 0 ? 'positive' : 'negative'}">${corr.change.toFixed(2)}%</span>
+        <div class="correlation">
+          <span class="correlation__label">${corr.symbol}</span>
+          <span class="correlation__value ${corr.change >= 0 ? 'u-text--positive' : 'u-text--negative'}">${corr.change.toFixed(2)}%</span>
         </div>
       `).join('');
     }

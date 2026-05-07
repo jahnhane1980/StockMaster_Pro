@@ -20,13 +20,13 @@
 <body>
 
     <!-- Header Bereich -->
-    <header id="main-header">
-        <div class="logo">
+    <header id="main-header" class="header">
+        <div class="header__logo">
             <img src="img/logo.png" alt="StockMaster Logo" class="logo-img">
             StockMaster
         </div>
 
-        <div class="settings-icon">
+        <div class="header__settings-icon">
             <ion-icon name="menu"></ion-icon>
         </div>
 
@@ -34,9 +34,9 @@
     </header>
 
     <!-- Hauptbereich -->
-    <main id="app-container">
+    <main id="app-container" class="l-main-layout">
         <section class="content-column">
-            <div id="chart-container" class="card">
+            <div id="chart-container" class="l-chart card">
                 <!-- Hier zeichnet das ChartModule automatisch rein -->
             </div>            
             
@@ -45,33 +45,33 @@
                 
                 <div id="empty-state">Bitte wähle eine Aktie aus der Watchlist.</div>
                 
-                <div id="intelligence-board" class="hidden">
+                <div id="intelligence-board" class="u-hidden">
                     <div>
                         <span id="board-price">--</span>
                         <span id="board-change">--</span>
                     </div>
                     
-                    <div class="sentiment-container">
+                    <div class="sentiment">
                         <h3>Fundamentals</h3>
                         <p>Market Cap: <span id="val-mcap">--</span></p>
                         <p>Debt/Equity: <span id="val-debt">--</span></p>
                         <p>Rev. Growth: <span id="val-rev">--</span></p>
                     </div>
 
-                    <div class="sentiment-container">
+                    <div class="sentiment">
                         <h3>Sentiment (News)</h3>
                         <p id="sentiment-text">Lädt...</p>
-                        <div class="sentiment-bar">
-                            <div id="sentiment-indicator" class="sentiment-dot"></div>
+                        <div class="sentiment__bar">
+                            <div id="sentiment-indicator" class="sentiment__indicator"></div>
                         </div>
                     </div>
 
-                    <div id="correlations-container" class="sentiment-container">
+                    <div id="correlations-container" class="sentiment">
                         <h3>Correlations</h3>
                         <div id="correlations-list">--</div>
                     </div>
 
-                    <div class="sentiment-container">
+                    <div class="sentiment">
                         <h3>Technical Indicators</h3>
                         <p>OBV: <span id="val-obv">--</span></p>
                     </div>
@@ -80,15 +80,15 @@
         </section>
 
         <aside class="watchlist-column">
-            <div id="watchlist-container" class="card">
+            <div id="watchlist-container" class="l-watchlist card">
                 <div class="search-container">
                     <input type="text" id="ticker-search" placeholder="Ticker (z.B. MARA)...">
                     <button id="add-ticker-btn" class="btn btn-icon">
                         <ion-icon name="add"></ion-icon>
                     </button>
-                    <span id="status-message"></span>
+                    <span id="status-message" class="watchlist__status"></span>
                 </div>
-                <div id="watchlist-items"></div>
+                <div id="watchlist-items" class="watchlist__items"></div>
             </div>
         </aside>
     </main>

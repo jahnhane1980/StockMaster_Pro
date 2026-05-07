@@ -12,11 +12,24 @@
     --text-secondary: #666666;
     --border: #e5e5e5;
     --placeholder: #999999;
-    --shadow: #000000;
+    --shadow: rgba(0, 0, 0, 0.1);
+    --shadow-heavy: rgba(0, 0, 0, 0.2);
     --error: #D6463D;
     --success: #46C06D;
     --warning: #F2A840;
+    
+    /* Layout specific */
     --layout-spacing: 2rem;
+    --card-padding: 1.5rem;
+    --card-border-radius: 0;
+    
+    /* Toast specific */
+    --toast-min-width: 280px;
+    --toast-max-width: 400px;
+    --toast-padding: 1rem 1.5rem;
+    --toast-border-radius: 8px;
+    --toast-border-width: 5px;
+    --toast-shadow: 0 10px 30px var(--shadow);
 }
 
 /* CSS Reset & Box-Sizing */
@@ -34,21 +47,19 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-.font-mono {
+/* --- Utility Classes --- */
+.u-font-mono {
     font-family: var(--font-data);
 }
 
-h1, h2, h3, h4, h5, h6 {
-    color: var(--text);
-    font-weight: 600;
+.u-text--positive { color: var(--success) !important; }
+.u-text--negative { color: var(--error) !important; }
+
+.u-hidden {
+    display: none !important;
 }
 
-h2 {
-    font-size: 1.2rem;
-    margin-bottom: 1rem;
-}
-
-.subtitle {
+.section__subtitle {
     color: var(--text-secondary);
     font-size: 0.9rem;
     margin-bottom: 1rem;
@@ -57,7 +68,7 @@ h2 {
 .card {
     background-color: var(--surface);
     border: 1px solid var(--border); 
-    padding: 1.5rem;
+    padding: var(--card-padding);
     margin: 0;
 }
 
@@ -109,7 +120,7 @@ ul {
     color: var(--text);
 }
 
-.btn-icon {
+.btn--icon {
     padding: 0.5rem;
     font-size: 1.4rem;
     line-height: 1;
@@ -127,15 +138,15 @@ ul {
     pointer-events: none;
 }
 
-.sm-toast {
-    min-width: 280px;
-    max-width: 400px;
-    padding: 1rem 1.5rem;
-    border-radius: 8px;
+.toast {
+    min-width: var(--toast-min-width);
+    max-width: var(--toast-max-width);
+    padding: var(--toast-padding);
+    border-radius: var(--toast-border-radius);
     background-color: var(--surface);
     color: var(--text);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    border-left: 5px solid var(--primary);
+    box-shadow: var(--toast-shadow);
+    border-left: var(--toast-border-width) solid var(--primary);
     font-family: var(--font-ui);
     font-size: 0.95rem;
     transform: translateX(120%);
@@ -143,14 +154,14 @@ ul {
     transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease;
 }
 
-.sm-toast.show {
+.toast.show {
     transform: translateX(0);
     opacity: 1;
 }
 
-.sm-toast.error { border-left-color: var(--error); }
-.sm-toast.success { border-left-color: var(--success); }
-.sm-toast.warning { border-left-color: var(--warning); }
+.toast--error { border-left-color: var(--error); }
+.toast--success { border-left-color: var(--success); }
+.toast--warning { border-left-color: var(--warning); }
 
 /* --- Watchlist Styles --- */
 .watchlist-item {
@@ -167,45 +178,46 @@ ul {
     background-color: var(--background);
 }
 
-.watchlist-item.active {
+.watchlist-item--active {
     background-color: var(--tertiary);
     color: var(--surface);
 }
 
-.ticker-symbol {
+.watchlist__symbol {
     font-weight: 600;
     font-family: var(--font-data);
 }
 
-.delete-btn-icon {
+.watchlist__btn--delete {
     color: var(--error);
     font-size: 1.2rem;
     cursor: pointer;
     transition: transform 0.2s ease;
 }
 
-.delete-btn-icon:hover {
+.watchlist__btn--delete:hover {
     transform: scale(1.1);
 }
 
-/* --- Status & Sentiment Styles --- */
-.positive { color: var(--success) !important; }
-.negative { color: var(--error) !important; }
-
-.sentiment-container {
-    margin-top: 15px;
+/* --- Sentiment & Intelligence Styles --- */
+.sentiment {
+    margin-top: 1rem;
 }
 
-.sentiment-bar {
+.sentiment__bar {
     width: 100%;
     height: 6px;
     background-color: var(--border);
     position: relative;
-    margin-top: 8px;
+    margin-top: 0.5rem;
     border-radius: 3px;
 }
 
-.sentiment-dot {
+/* Modifier für semantische Einfärbung der Bar (optional genutzt) */
+.sentiment__bar--positive { background-color: var(--success); }
+.sentiment__bar--negative { background-color: var(--error); }
+
+.sentiment__indicator {
     width: 10px;
     height: 10px;
     background-color: var(--text);
@@ -216,8 +228,9 @@ ul {
     border: 2px solid var(--surface);
 }
 
-.hidden {
-    display: none !important;
+.sentiment__value {
+    font-weight: 600;
+    font-family: var(--font-data);
 }
 
 .empty-msg {
@@ -227,7 +240,7 @@ ul {
     text-align: center;
 }
 
-.correlation-item {
+.correlation {
     display: flex;
     justify-content: space-between;
     padding: 4px 0;
@@ -236,8 +249,18 @@ ul {
     border-bottom: 1px dotted var(--border);
 }
 
-.correlation-item span:first-child {
+.correlation--benchmark {
+    border-bottom: 1px solid var(--border);
+    background-color: var(--background);
+    padding: 6px 4px;
+}
+
+.correlation__label {
     font-weight: 600;
+}
+
+.correlation__value {
+    font-variant-numeric: tabular-nums;
 }
 
 /* --- UI Loading System --- */

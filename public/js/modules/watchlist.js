@@ -142,7 +142,7 @@ window.StockMaster.WatchlistModule = (() => {
     div.dataset.ticker = item.symbol;
 
     const symbolSpan = document.createElement('span');
-    symbolSpan.className = 'ticker-symbol';
+    symbolSpan.className = 'watchlist__symbol';
     symbolSpan.textContent = item.symbol;
     div.appendChild(symbolSpan);
 
@@ -155,13 +155,13 @@ window.StockMaster.WatchlistModule = (() => {
       }
       
       // Visuelle Markierung des ausgewählten Elements.
-      document.querySelectorAll('.watchlist-item').forEach(el => el.classList.remove('active'));
-      div.classList.add('active');
+      document.querySelectorAll('.watchlist-item').forEach(el => el.classList.remove('watchlist-item--active'));
+      div.classList.add('watchlist-item--active');
     });
 
     const deleteBtn = document.createElement('ion-icon');
     deleteBtn.setAttribute('name', 'trash-outline');
-    deleteBtn.className = 'delete-btn-icon';
+    deleteBtn.className = 'watchlist__btn--delete';
 
     // Separater Listener für den Lösch-Button (StopPropagation verhindert Selektion beim Löschen).
     deleteBtn.addEventListener('click', async (e) => {

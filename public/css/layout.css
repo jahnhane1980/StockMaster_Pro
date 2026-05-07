@@ -1,3 +1,20 @@
+/* --- Layout Variables --- */
+:root {
+    --header-height: auto;
+    --header-padding: 1rem 2rem;
+    --header-border-width: 2px;
+    
+    --sidebar-width: 250px;
+    --layout-gap: var(--layout-spacing);
+    --layout-padding: var(--layout-spacing);
+    
+    --chart-min-height: 400px;
+    --mobile-breakpoint: 1000px;
+    --mobile-padding: 1rem;
+    --mobile-gap: 1.5rem;
+    --mobile-chart-height: 400px;
+}
+
 /* --- Global Layout Base --- */
 html, body {
     height: 100%;
@@ -13,20 +30,20 @@ body {
 }
 
 /* --- Header Layout --- */
-#main-header {
+.header {
     position: relative;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 2rem;
+    padding: var(--header-padding);
     background-color: var(--surface);
     /* Eine dezente Linie unten, um den Header vom Grid abzugrenzen */
-    border-bottom: 2px solid var(--border); 
+    border-bottom: var(--header-border-width) solid var(--border); 
     flex-shrink: 0;
     width: 100%;
 }
 
-#main-header .logo {
+.header__logo {
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -39,7 +56,7 @@ body {
     width: auto;
 }
 
-#main-header .settings-icon {
+.header__settings-icon {
     font-size: 2rem;
     display: flex;
     align-items: center;
@@ -47,13 +64,13 @@ body {
 }
 
 /* --- Main Grid Layout --- */
-#app-container {
+.l-main-layout {
     flex-grow: 1;
     display: grid;
-    /* 1fr für den Chart (flexibel), 250px für die Watchlist (fest) */
-    grid-template-columns: 1fr 250px; 
-    gap: var(--layout-spacing);
-    padding: var(--layout-spacing);
+    /* 1fr für den Chart (flexibel), --sidebar-width für die Watchlist (fest) */
+    grid-template-columns: 1fr var(--sidebar-width); 
+    gap: var(--layout-gap);
+    padding: var(--layout-padding);
     min-height: 0; 
     width: 100vw;
     max-width: 100%;
@@ -64,14 +81,14 @@ body {
     display: grid;
     /* Chart nimmt den meisten Platz (1fr), Details passen sich an den Inhalt an (auto) */
     grid-template-rows: 1fr auto; 
-    gap: var(--layout-spacing);
+    gap: var(--layout-gap);
     min-height: 0;
     min-width: 0;
     overflow: hidden;
 }
 
-#chart-container {
-    min-height: 400px;
+.l-chart {
+    min-height: var(--chart-min-height);
     height: 100%;
     min-width: 0;
     overflow: hidden;
@@ -84,7 +101,7 @@ body {
     min-height: 0;
 }
 
-#watchlist-container {
+.l-watchlist {
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -104,29 +121,29 @@ body {
     min-width: 0;
 }
 
-#status-message {
+.watchlist__status {
     flex-basis: 100%;
     font-size: 0.8rem;
     color: var(--text-secondary);
 }
 
-#watchlist-items {
+.watchlist__items {
     flex-grow: 1;
     overflow-y: auto; /* Erlaubt das Scrollen, wenn die Liste zu lang wird */
 }
 
 /* --- Responsiveness --- */
 @media (max-width: 1000px) {
-    #app-container {
+    .l-main-layout {
         grid-template-columns: 1fr;
-        padding: 1rem;
-        gap: 1.5rem;
+        padding: var(--mobile-padding);
+        gap: var(--mobile-gap);
         overflow-y: auto;
     }
 
     .content-column {
         height: auto;
-        grid-template-rows: 400px auto;
+        grid-template-rows: var(--mobile-chart-height) auto;
     }
 
     .watchlist-column {
@@ -135,7 +152,7 @@ body {
         margin-bottom: 1rem;
     }
     
-    #watchlist-items {
+    .watchlist__items {
         max-height: 300px;
     }
 }
