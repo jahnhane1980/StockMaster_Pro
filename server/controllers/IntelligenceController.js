@@ -2,6 +2,7 @@
 const HistoricalDataDAO = require('../models/HistoricalDataDAO');
 const AnalysisService = require('../services/AnalysisService');
 const Logger = require('../utils/Logger');
+const HttpStatus = require('../utils/HttpStatus');
 const { StockMasterError } = require('../utils/Errors');
 
 /**
@@ -25,7 +26,7 @@ class IntelligenceController {
     const symbolRegex = /^[A-Za-z0-9]{1,10}$/;
     if (!symbol || !symbolRegex.test(symbol)) {
       Logger.warn(`[IntelligenceController] Ungültiges Symbol abgelehnt: ${symbol}`);
-      return res.status(400).json({ 
+      return res.status(HttpStatus.BAD_REQUEST).json({ 
         success: false, 
         error: 'Ungültiges Symbol. Nur alphanumerische Zeichen (max. 10) erlaubt.' 
       });
@@ -40,7 +41,7 @@ class IntelligenceController {
       const goldHistory = await HistoricalDataDAO.getHistoryForChart('GOLD');
 
       if (!mainHistory || mainHistory.length < 10) {
-        return res.status(400).json({ 
+        return res.status(HttpStatus.BAD_REQUEST).json({ 
           error: 'Unzureichende historische Daten für das Haupt-Symbol.',
           symbol: symbol
         });
@@ -62,7 +63,7 @@ class IntelligenceController {
       }
 
       // 3. Antwort senden
-      return res.status(200).json({
+      return res.status(HttpStatus.OK).json({
         symbol: symbol,
         timestamp: new Date().toISOString(),
         correlations: correlations
@@ -78,7 +79,7 @@ class IntelligenceController {
         });
       }
 
-      return res.status(500).json({ 
+      return res.status(HttpStatus.SERVER_ERROR).json({ 
         success: false,
         error: 'Interner Serverfehler bei der Korrelations-Berechnung.' 
       });

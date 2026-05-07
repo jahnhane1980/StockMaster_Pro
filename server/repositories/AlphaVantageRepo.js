@@ -2,6 +2,7 @@
 const axios = require('axios');
 const requestManager = require('../services/RequestManager');
 const Logger = require('../utils/Logger');
+const HttpStatus = require('../utils/HttpStatus');
 const { ProviderLimitError, ResourceNotFoundError } = require('../utils/Errors');
 
 /**
@@ -32,6 +33,11 @@ class AlphaVantageRepo {
     
     const response = await axios.get(`${this.baseUrl}?${urlParams.toString()}`);
     
+    // Validierung des HTTP-Status (Regel 12)
+    if (response.status !== HttpStatus.OK) {
+        throw new Error(`Alpha Vantage API lieferte Status ${response.status}`);
+    }
+
     // Alpha Vantage gibt bei Limits oft 200 OK zurück, aber mit einer Info-Message
     if (response.data && response.data.Information && response.data.Information.includes('rate limit')) {
       throw new ProviderLimitError('Alpha Vantage Daily Rate Limit erreicht.');

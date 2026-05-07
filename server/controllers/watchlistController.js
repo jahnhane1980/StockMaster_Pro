@@ -4,6 +4,7 @@ const TickerRepository = require('../repositories/TickerRepository');
 const StockService = require('../services/StockService');
 const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
+const HttpStatus = require('../utils/HttpStatus');
 const { StockMasterError } = require('../utils/Errors');
 
 /**
@@ -27,7 +28,7 @@ class WatchlistController {
     const symbolRegex = /^[A-Za-z0-9]{1,10}$/;
     if (!symbol || !symbolRegex.test(symbol)) {
       Logger.warn(`[WatchlistController] Ungültiges Symbol abgelehnt: ${symbol}`);
-      return res.status(400).json({ 
+      return res.status(HttpStatus.BAD_REQUEST).json({ 
         success: false, 
         error: 'Ungültiges Symbol. Nur alphanumerische Zeichen (max. 10) erlaubt.' 
       });
@@ -52,13 +53,13 @@ class WatchlistController {
       });
 
       // Antwort an das Frontend
-      return res.status(200).json({ 
+      return res.status(HttpStatus.OK).json({ 
         success: true,
         message: `${ticker} zur Watchlist hinzugefügt. Daten werden im Hintergrund synchronisiert.` 
       });
     } catch (err) {
       Logger.error(`[WatchlistController] Fehler beim Hinzufügen: ${err.message}`);
-      return res.status(500).json({ error: 'Interner Serverfehler beim Speichern des Tickers.' });
+      return res.status(HttpStatus.SERVER_ERROR).json({ error: 'Interner Serverfehler beim Speichern des Tickers.' });
     }
   }
 
@@ -74,14 +75,14 @@ class WatchlistController {
     const { mainTicker, linkedTicker, score } = req.body;
 
     if (!mainTicker || !linkedTicker) {
-      return res.status(400).json({ error: 'Haupt-Ticker oder verknüpfter Ticker fehlt.' });
+      return res.status(HttpStatus.BAD_REQUEST).json({ error: 'Haupt-Ticker oder verknüpfter Ticker fehlt.' });
     }
 
     // Score Validierung (Regel 4)
     const numericScore = parseFloat(score);
     if (isNaN(numericScore) || numericScore < -1 || numericScore > 1) {
       Logger.warn(`[WatchlistController] Ungültiger Korrelations-Score: ${score}`);
-      return res.status(400).json({ 
+      return res.status(HttpStatus.BAD_REQUEST).json({ 
         success: false, 
         error: 'Score muss eine Zahl zwischen -1 und 1 sein.' 
       });
@@ -94,10 +95,10 @@ class WatchlistController {
         numericScore
       );
 
-      return res.status(200).json({ success: true });
+      return res.status(HttpStatus.OK).json({ success: true });
     } catch (err) {
       Logger.error(`[WatchlistController] Fehler beim Erstellen der Korrelation: ${err.message}`);
-      return res.status(500).json({ error: 'Interner Serverfehler.' });
+      return res.status(HttpStatus.SERVER_ERROR).json({ error: 'Interner Serverfehler.' });
     }
   }
 
@@ -115,7 +116,7 @@ class WatchlistController {
     try {
       // StockService aggregiert Daten von verschiedenen Providern und aus der DB.
       const intelligenceData = await StockService.getIntelligenceData(ticker);
-      return res.status(200).json(intelligenceData);
+      return res.status(HttpStatus.OK).json(intelligenceData);
     } catch (error) {
       Logger.error(`[WatchlistController] Fehler Board für ${ticker}: ${error.message}`);
       
@@ -126,7 +127,7 @@ class WatchlistController {
         });
       }
       
-      return res.status(500).json({ 
+      return res.status(HttpStatus.SERVER_ERROR).json({ 
         success: false,
         error: 'Interner Serverfehler beim Laden der Board-Daten.' 
       });

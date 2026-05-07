@@ -1,3 +1,5 @@
+const HttpStatus = require('./HttpStatus');
+
 /**
  * Zentrales Error-Management für StockMaster Pro.
  * Intent: Bereitstellung spezialisierter Error-Klassen zur präzisen Steuerung 
@@ -5,7 +7,7 @@
  */
 
 class StockMasterError extends Error {
-  constructor(message, statusCode = 500) {
+  constructor(message, statusCode = HttpStatus.SERVER_ERROR) {
     super(message);
     this.name = this.constructor.name;
     this.statusCode = statusCode;
@@ -15,19 +17,19 @@ class StockMasterError extends Error {
 
 class ProviderLimitError extends StockMasterError {
   constructor(message = 'Provider API Limit erreicht.') {
-    super(message, 429);
+    super(message, HttpStatus.TOO_MANY_REQUESTS);
   }
 }
 
 class ValidationError extends StockMasterError {
   constructor(message) {
-    super(message, 400);
+    super(message, HttpStatus.BAD_REQUEST);
   }
 }
 
 class ResourceNotFoundError extends StockMasterError {
   constructor(message = 'Ressource nicht gefunden.') {
-    super(message, 404);
+    super(message, HttpStatus.NOT_FOUND);
   }
 }
 
