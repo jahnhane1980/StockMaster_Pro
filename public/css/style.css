@@ -1,5 +1,5 @@
 /* --- Toast Notifications (NotificationService) --- */
-#sm-toast-container {
+.toast-container {
     position: fixed;
     bottom: 2rem;
     right: 2rem;

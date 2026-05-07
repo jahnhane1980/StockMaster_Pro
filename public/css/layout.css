@@ -112,8 +112,8 @@ body {
 }
 
 /* --- CLS Prävention Details --- */
-#empty-state, 
-#intelligence-board {
+.l-details-placeholder, 
+.c-intelligence-board {
     min-height: 350px;
 }
 

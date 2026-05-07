@@ -47,6 +47,7 @@ window.StockMaster.NotificationService = (function() {
     if (document.getElementById(CONTAINER_ID)) return;
     const container = document.createElement('div');
     container.id = CONTAINER_ID;
+    container.className = 'toast-container';
     document.body.appendChild(container);
   }
 
