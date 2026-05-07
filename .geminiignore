@@ -13,4 +13,4 @@ server/*.db
 # Logs und Systemdateien
 *.log
 .DS_Store
-.env
+server/.env

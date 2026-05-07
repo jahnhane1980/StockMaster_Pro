@@ -9,7 +9,9 @@
 *   **Regel 5 (Atomic-Change):** Maximal 3 Dateien gleichzeitig ändern. Bei größeren Aufgaben erst einen Step-by-Step-Fahrplan erstellen.
 *   **Regel 6 (Full-Body):** Immer den vollständigen Dateiinhalt liefern. Keine Abkürzungen (z. B. //...) oder Teil-Code.
 *   **Regel 7 (Prettify):** Code-Ausgaben sauber formatiert und eingerückt ausgeben. Fokus auf Struktur und Lesbarkeit.
-
+* **Regel 8 (Architektonische Reinheit):** Strikte Trennung von Belangen (SoC). Logik (Services/Repos) darf keine DOM-Manipulationen durchführen. Kommunikation erfolgt via Pub/Sub (Events).
+* **Regel 9 (Modularer Blueprint):** Neue UI-Komponenten folgen dem IIFE-Pattern mit standardisierter `init()`-Schnittstelle (analog zu chart.js). Die app.js dient nur als Orchestrator.
+* **Regel 10 (Event-Registry-Pflicht):** Alle Events müssen als Konstanten in events.js definiert sein. Keine Verwendung von String-Literalen für Event-Namen in der Geschäftslogik.
 ---
 
 ### Modus: Doku-Buddy
