@@ -161,6 +161,9 @@ window.StockMaster.WatchlistModule = (() => {
 
     const deleteBtn = document.createElement('ion-icon');
     deleteBtn.setAttribute('name', 'trash-outline');
+    deleteBtn.setAttribute('aria-label', `Ticker ${item.symbol} löschen`);
+    deleteBtn.setAttribute('role', 'button');
+    deleteBtn.setAttribute('tabindex', '0');
     deleteBtn.className = 'watchlist__btn--delete';
 
     // Separater Listener für den Lösch-Button (StopPropagation verhindert Selektion beim Löschen).

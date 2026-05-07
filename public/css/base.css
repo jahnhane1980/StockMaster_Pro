@@ -1,0 +1,48 @@
+/* Globale CSS Variablen (Farbpalette & Fonts) */
+:root {
+    --font-ui: 'Sora', sans-serif;
+    --font-data: 'JetBrains Mono', monospace;
+
+    --primary: #007AFF;
+    --secondary: #53A5FF;
+    --tertiary: #A2D0FF;
+    --background: #f5f5f7;
+    --surface: #ffffff;
+    --text: #333333;
+    --text-secondary: #666666;
+    --border: #e5e5e5;
+    --placeholder: #999999;
+    --shadow: rgba(0, 0, 0, 0.1);
+    --shadow-heavy: rgba(0, 0, 0, 0.2);
+    --error: #D6463D;
+    --success: #46C06D;
+    --warning: #F2A840;
+    
+    /* Layout specific */
+    --layout-spacing: 2rem;
+    --card-padding: 1.5rem;
+    --card-border-radius: 0;
+    
+    /* Toast specific */
+    --toast-min-width: 280px;
+    --toast-max-width: 400px;
+    --toast-padding: 1rem 1.5rem;
+    --toast-border-radius: 8px;
+    --toast-border-width: 5px;
+    --toast-shadow: 0 10px 30px var(--shadow);
+}
+
+/* CSS Reset & Box-Sizing */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-ui);
+    background-color: var(--background);
+    color: var(--text);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}

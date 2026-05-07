@@ -10,9 +10,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Sora:wght@400;600&display=swap" rel="stylesheet">
 
-    <!-- CSS Verknüpfung -->
-    <link rel="stylesheet" href="css/style.css">
+    <!-- CSS Verknüpfung (Modulare Kaskade gemäß Regel 3 & 7) -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/style.css">
 
     <!-- TradingView Lightweight Charts CDN -->
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
@@ -26,7 +28,7 @@
             StockMaster
         </div>
 
-        <div class="header__settings-icon">
+        <div class="header__settings-icon" aria-label="Menü öffnen" role="button" tabindex="0">
             <ion-icon name="menu"></ion-icon>
         </div>
 
@@ -43,7 +45,10 @@
             <div id="details-container" class="card">
                 <h2 id="board-ticker-name">Details zum Ticker</h2>
                 
-                <div id="empty-state">Bitte wähle eine Aktie aus der Watchlist.</div>
+                <!-- Empty State & Intelligence Board teilen sich min-height via layout.css (Regel 7) -->
+                <div id="empty-state" class="u-flex-center">
+                    <p>Bitte wähle eine Aktie aus der Watchlist aus.</p>
+                </div>
                 
                 <div id="intelligence-board" class="u-hidden">
                     <div>
@@ -82,8 +87,8 @@
         <aside class="watchlist-column">
             <div id="watchlist-container" class="l-watchlist card">
                 <div class="search-container">
-                    <input type="text" id="ticker-search" placeholder="Ticker (z.B. MARA)...">
-                    <button id="add-ticker-btn" class="btn btn-icon">
+                    <input type="text" id="ticker-search" placeholder="Ticker (z.B. MARA)..." aria-label="Ticker Symbol suchen">
+                    <button id="add-ticker-btn" class="btn btn-icon" aria-label="Ticker hinzufügen">
                         <ion-icon name="add"></ion-icon>
                     </button>
                     <span id="status-message" class="watchlist__status"></span>

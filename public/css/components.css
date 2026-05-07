@@ -1,0 +1,79 @@
+/* --- Utility Classes --- */
+.u-font-mono {
+    font-family: var(--font-data);
+}
+
+.u-text--positive { color: var(--success) !important; }
+.u-text--negative { color: var(--error) !important; }
+
+.u-hidden {
+    display: none !important;
+}
+
+/* --- Reusable UI Components --- */
+.card {
+    background-color: var(--surface);
+    border: 1px solid var(--border); 
+    padding: var(--card-padding);
+    margin: 0;
+}
+
+.section__subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+/* --- Form Elements --- */
+input, textarea, select {
+    border: 1px solid var(--border);
+    background-color: var(--surface);
+    color: var(--text);
+    padding: 0.5rem;
+    font-family: inherit;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input::placeholder {
+    color: var(--placeholder);
+}
+
+input:focus, textarea:focus, select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--tertiary); 
+}
+
+ul {
+    list-style: none;
+}
+
+/* --- Buttons --- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--primary);
+    color: var(--surface);
+    border: none;
+    padding: 0.5rem 1rem;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 4px;
+    gap: 0.5rem;
+}
+
+.btn:hover, .btn:active {
+    background-color: var(--tertiary);
+    color: var(--text);
+}
+
+.btn--icon {
+    padding: 0.5rem;
+    font-size: 1.4rem;
+    line-height: 1;
+}

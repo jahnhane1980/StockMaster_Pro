@@ -46,9 +46,9 @@ window.StockMaster.IntelligenceModule = (() => {
 
     // Reset des aktuellen Zustands, um alte Daten während des Ladevorgangs auszublenden.
     currentData = null; 
-    if (boardPanel) boardPanel.classList.add('hidden');
+    if (boardPanel) boardPanel.classList.add('u-hidden');
     if (emptyStatePanel) {
-      emptyStatePanel.classList.remove('hidden');
+      emptyStatePanel.classList.remove('u-hidden');
       emptyStatePanel.textContent = `Lade Intelligence-Daten für ${symbol}...`;
     }
 

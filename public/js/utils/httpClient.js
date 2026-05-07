@@ -67,6 +67,7 @@ window.StockMaster.HttpClient = (function() {
    */
   function handleHttpError(response) {
     let errorMessage = 'Ein unbekannter API-Fehler ist aufgetreten.';
+    let isLimitError = false;
 
     if (response.status === 401 || response.status === 403) {
       errorMessage = 'Zugriff verweigert. Bitte überprüfe deinen API-Key.';
@@ -74,12 +75,13 @@ window.StockMaster.HttpClient = (function() {
       errorMessage = 'Die angeforderte Ressource wurde nicht gefunden.';
     } else if (response.status === 429) {
       errorMessage = 'API-Ratenlimit erreicht. Bitte warte einen Moment.';
+      isLimitError = true;
     } else if (response.status >= 500) {
       errorMessage = 'Der externe Server meldet ein Problem (5xx).';
     }
 
     document.dispatchEvent(new CustomEvent(window.StockMaster.Events.ERROR_OCCURRED, {
-      detail: { message: errorMessage }
+      detail: { message: errorMessage, isLimitError: isLimitError }
     }));
   }
 

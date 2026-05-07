@@ -74,10 +74,26 @@ window.StockMaster.ChartModule = (() => {
      */
     const handleDataReady = (event) => {
         const { symbol, history, correlations } = event.detail;
+        const container = document.getElementById(chartContainerId);
         
+        // Vorhandenes Overlay entfernen
+        const existingOverlay = container.querySelector('.chart-empty-state');
+        if (existingOverlay) existingOverlay.remove();
+
         if (!history || history.length === 0) {
             console.warn(`[ChartModule] Keine historischen Daten für ${symbol} empfangen.`);
             candleSeries.setData([]);
+            
+            // Empty State UI Overlay (Regel 19)
+            const overlay = document.createElement('div');
+            overlay.className = 'chart-empty-state';
+            overlay.innerHTML = `
+                <div class="chart-empty-state__content">
+                    <ion-icon name="analytics-outline" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></ion-icon>
+                    <p>Keine historischen Daten für ${symbol} verfügbar.</p>
+                </div>
+            `;
+            container.appendChild(overlay);
             return;
         }
 
