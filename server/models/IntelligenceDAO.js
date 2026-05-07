@@ -1,5 +1,6 @@
 // server/models/IntelligenceDAO.js
 const { db } = require('../database');
+const Logger = require('../utils/Logger');
 
 class IntelligenceDAO {
   
@@ -64,7 +65,7 @@ class IntelligenceDAO {
     });
 
     transaction(sentiments);
-    console.log(`[DAO] Sentiment-Einträge für ${ticker} verarbeitet.`);
+    Logger.info(`[DAO] Sentiment-Einträge für ${ticker} verarbeitet.`);
     return sentiments.length;
   }
 

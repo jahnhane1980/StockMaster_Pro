@@ -3,6 +3,7 @@ const { db } = require('../database');
 const TickerRepository = require('../repositories/tickerRepository');
 const stockService = require('../services/StockService');
 const intelligenceDAO = require('../models/IntelligenceDAO');
+const Logger = require('../utils/Logger');
 
 class WatchlistController {
   
@@ -27,12 +28,12 @@ class WatchlistController {
       });
 
       // Log für den Sync-Start
-      console.log(`Background-Sync gestartet für Symbol: ${ticker}`);
+      Logger.info(`Background-Sync gestartet für Symbol: ${ticker}`);
       
       // 2. Hintergrund-Sync anstoßen (ohne await, um UI nicht zu blockieren)
       // Der StockService kümmert sich um das Abrufen und Persistieren aller Daten.
       stockService.syncTickerData(ticker).catch(e => {
-        console.error(`[WatchlistController] Hintergrund-Sync Fehler für ${ticker}:`, e.message);
+        Logger.error(`[WatchlistController] Hintergrund-Sync Fehler für ${ticker}: ${e.message}`);
       });
 
       // Antwort an das Frontend
@@ -41,7 +42,7 @@ class WatchlistController {
         message: `${ticker} zur Watchlist hinzugefügt. Daten werden im Hintergrund synchronisiert.` 
       });
     } catch (err) {
-      console.error('[WatchlistController] Fehler beim Hinzufügen:', err.message);
+      Logger.error(`[WatchlistController] Fehler beim Hinzufügen: ${err.message}`);
       return res.status(500).json({ error: 'Interner Serverfehler beim Speichern des Tickers.' });
     }
   }
@@ -66,7 +67,7 @@ class WatchlistController {
 
       return res.status(200).json({ success: true });
     } catch (err) {
-      console.error('[WatchlistController] Fehler beim Erstellen der Korrelation:', err.message);
+      Logger.error(`[WatchlistController] Fehler beim Erstellen der Korrelation: ${err.message}`);
       return res.status(500).json({ error: 'Interner Serverfehler.' });
     }
   }
@@ -89,7 +90,7 @@ class WatchlistController {
         });
       }
       
-      console.error('[WatchlistController] Fehler Board:', error.message);
+      Logger.error(`[WatchlistController] Fehler Board: ${error.message}`);
       return res.status(500).json({ error: 'Interner Serverfehler beim Laden der Board-Daten.' });
     }
   }

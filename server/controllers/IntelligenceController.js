@@ -1,6 +1,7 @@
 // server/controllers/IntelligenceController.js
 const HistoricalDataDAO = require('../models/HistoricalDataDAO');
 const AnalysisService = require('../services/AnalysisService');
+const Logger = require('../utils/Logger');
 
 class IntelligenceController {
 
@@ -12,7 +13,7 @@ class IntelligenceController {
     const symbol = req.params.symbol.toUpperCase();
 
     try {
-      console.log(`[IntelligenceController] Berechne Markt-Korrelationen für: ${symbol}`);
+      Logger.info(`[IntelligenceController] Berechne Markt-Korrelationen für: ${symbol}`);
 
       // 1. Historische Daten abrufen
       const mainHistory = await HistoricalDataDAO.getHistoryForChart(symbol);
@@ -49,7 +50,7 @@ class IntelligenceController {
       });
 
     } catch (error) {
-      console.error(`[IntelligenceController] Fehler bei Korrelations-Abfrage für ${symbol}:`, error.message);
+      Logger.error(`[IntelligenceController] Fehler bei Korrelations-Abfrage für ${symbol}: ${error.message}`);
       return res.status(500).json({ error: 'Interner Serverfehler bei der Korrelations-Berechnung.' });
     }
   }

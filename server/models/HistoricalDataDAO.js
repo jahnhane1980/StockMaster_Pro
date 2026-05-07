@@ -1,5 +1,6 @@
 // server/models/HistoricalDataDAO.js
 const { db } = require('../database');
+const Logger = require('../utils/Logger');
 
 class HistoricalDataDAO {
   
@@ -22,7 +23,7 @@ class HistoricalDataDAO {
    */
   insertMany(ticker, data, provider = 'AV') {
     if (!data || data.length === 0) { 
-      console.warn('DAO: insertMany aborted - data array is empty'); 
+      Logger.warn('DAO: insertMany aborted - data array is empty'); 
       return 0; 
     }
 
@@ -51,7 +52,7 @@ class HistoricalDataDAO {
     });
 
     insertTransaction(data);
-    console.log(`[DAO] ${data.length} Einträge für ${ticker} synchron gespeichert (Provider: ${provider}).`);
+    Logger.info(`[DAO] ${data.length} Einträge für ${ticker} synchron gespeichert (Provider: ${provider}).`);
     return data.length;
   }
 

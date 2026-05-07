@@ -1,4 +1,5 @@
 // server/services/RequestManager.js
+const Logger = require('../utils/Logger');
 
 class RequestManager {
   constructor() {
@@ -68,7 +69,7 @@ class RequestManager {
       // Falls wir nur noch AV Tasks haben, aber im Limit sind, warten wir kurz
       const hasAVTasks = this.queues.P1.length > 0 || this.queues.P2.length > 0 || this.queues.P3.length > 0;
       if (hasAVTasks) {
-        // console.log("[RIM] Nur noch AV Tasks in der Queue, aber Limit erreicht. Warte...");
+        // Logger.info("[RIM] Nur noch AV Tasks in der Queue, aber Limit erreicht. Warte...");
         setTimeout(() => this.processQueue(), 1000);
       }
       return;

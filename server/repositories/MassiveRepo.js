@@ -1,6 +1,7 @@
 // server/repositories/MassiveRepo.js
 const axios = require('axios');
 const requestManager = require('../services/RequestManager');
+const Logger = require('../utils/Logger');
 
 class MassiveRepo {
   constructor() {
@@ -40,7 +41,7 @@ class MassiveRepo {
   async getRealtimeQuote(ticker) {
     const task = () => this._fetchFromAPI(`/stocks/${ticker}/quote`);
 
-    console.log(`[MassiveRepo] Queueing Realtime Quote for ${ticker} (P1)`);
+    Logger.info(`[MassiveRepo] Queueing Realtime Quote for ${ticker} (P1)`);
     return requestManager.enqueue('P1', this.providerName, task);
   }
 
@@ -52,7 +53,7 @@ class MassiveRepo {
       interval: '5m' // 5-Minuten Kerzen für den heutigen Tag
     });
 
-    console.log(`[MassiveRepo] Queueing Intraday Data for ${ticker} (P1)`);
+    Logger.info(`[MassiveRepo] Queueing Intraday Data for ${ticker} (P1)`);
     return requestManager.enqueue('P1', this.providerName, task);
   }
 
@@ -67,7 +68,7 @@ class MassiveRepo {
       interval: '1d'
     });
 
-    console.log(`[MassiveRepo] Queueing History Diff for ${ticker} (${fromDate} to ${toDate}) (P1)`);
+    Logger.info(`[MassiveRepo] Queueing History Diff for ${ticker} (${fromDate} to ${toDate}) (P1)`);
     return requestManager.enqueue('P1', this.providerName, task);
   }
 }

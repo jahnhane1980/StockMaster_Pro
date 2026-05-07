@@ -5,6 +5,7 @@ const RequestManager = require('./RequestManager');
 const analysisService = require('./AnalysisService');
 const historicalDataDAO = require('../models/HistoricalDataDAO');
 const intelligenceDAO = require('../models/IntelligenceDAO');
+const Logger = require('../utils/Logger');
 
 class StockService {
 
@@ -20,7 +21,7 @@ class StockService {
    * Wird typischerweise im Hintergrund aufgerufen (z.B. beim Hinzufügen zur Watchlist).
    */
   async syncTickerData(symbol) {
-    console.log(`[StockService] Starte Full-Sync für: ${symbol}`);
+    Logger.info(`[StockService] Starte Full-Sync für: ${symbol}`);
     const ticker = symbol.toUpperCase();
 
     try {
@@ -28,15 +29,15 @@ class StockService {
       // Realtime (Massive P1), Historie (AV P2) und Sentiment (AV P3)
       const [realtime, historyRaw, sentimentRaw] = await Promise.all([
         this.getRealtimeQuote(ticker).catch(err => {
-          console.warn(`[Sync] Realtime-Fehler für ${ticker}:`, err.message);
+          Logger.warn(`[Sync] Realtime-Fehler für ${ticker}: ${err.message}`);
           return null;
         }),
         alphaVantageRepo.getDailyHistory(ticker).catch(err => {
-          console.warn(`[Sync] Historie-Fehler für ${ticker}:`, err.message);
+          Logger.warn(`[Sync] Historie-Fehler für ${ticker}: ${err.message}`);
           return null;
         }),
         alphaVantageRepo.getNewsSentiment(ticker).catch(err => {
-          console.warn(`[Sync] Sentiment-Fehler für ${ticker}:`, err.message);
+          Logger.warn(`[Sync] Sentiment-Fehler für ${ticker}: ${err.message}`);
           return null;
         })
       ]);
@@ -53,7 +54,7 @@ class StockService {
         await intelligenceDAO.insertSentiment(ticker, mappedSentiment);
       }
 
-      console.log(`[StockService] Sync für ${ticker} erfolgreich abgeschlossen.`);
+      Logger.info(`[StockService] Sync für ${ticker} erfolgreich abgeschlossen.`);
       
       // 4. Korrelationen neu berechnen (falls Basiswerte vorhanden sind)
       await this.recalculateCorrelations(ticker);
@@ -61,7 +62,7 @@ class StockService {
       return true;
 
     } catch (error) {
-      console.error(`[StockService] Kritischer Fehler im Sync-Prozess für ${ticker}:`, error.message);
+      Logger.error(`[StockService] Kritischer Fehler im Sync-Prozess für ${ticker}: ${error.message}`);
       return false;
     }
   }
@@ -72,14 +73,14 @@ class StockService {
    */
   async getIntelligenceData(ticker) {
     try {
-      console.log(`[StockService] Lade Intelligence-Daten für: ${ticker}`);
+      Logger.info(`[StockService] Lade Intelligence-Daten für: ${ticker}`);
 
       // 1. ECHTZEIT-DATEN HOLEN (Massive - Prio 1) - Wrapped in try-catch
       let realtimeData = { price: 0, change: 0 };
       try {
         realtimeData = await this.getRealtimeQuote(ticker);
       } catch (err) {
-        console.error(`[StockService] Fehler beim Laden der Echtzeit-Daten für ${ticker}:`, err.message);
+        Logger.error(`[StockService] Fehler beim Laden der Echtzeit-Daten für ${ticker}: ${err.message}`);
       }
 
       // 2. HISTORISCHE DATEN (Hybrid-Logik: AV vs. Massive)
@@ -88,14 +89,14 @@ class StockService {
 
       if (!lastRecordDate) {
         // Fall A: Keine Daten vorhanden -> Initiale Betankung (5 Jahre) über Alpha Vantage
-        console.log(`[StockService] Keine Historie für ${ticker}. Hole 5 Jahre von AV...`);
+        Logger.info(`[StockService] Keine Historie für ${ticker}. Hole 5 Jahre von AV...`);
         const historyRaw = await alphaVantageRepo.getDailyHistory(ticker);
         const mappedHistory = this._mapAlphaVantageHistory(historyRaw);
         await historicalDataDAO.insertMany(ticker, mappedHistory, 'AV');
         
       } else if (lastRecordDate < todayStr) {
         // Fall B: Daten vorhanden, aber Lücke -> Update über Massive
-        console.log(`[StockService] Historie für ${ticker} veraltet (Stand: ${lastRecordDate}). Hole Diffs von Massive...`);
+        Logger.info(`[StockService] Historie für ${ticker} veraltet (Stand: ${lastRecordDate}). Hole Diffs von Massive...`);
         const historyRaw = await MassiveRepo.getHistoricalData(ticker, lastRecordDate, todayStr);
         const mappedHistory = this._mapMassiveHistory(historyRaw);
         await historicalDataDAO.insertMany(ticker, mappedHistory, 'MASSIVE');
@@ -109,7 +110,7 @@ class StockService {
       
       if (!metadata || this._isDataStale(metadata.last_updated_fundamentals, 30)) {
         // Fundamentaldaten fehlen oder sind älter als 30 Tage -> AV fragen
-        console.log(`[StockService] Fundamentals für ${ticker} veraltet. Hole von AV...`);
+        Logger.info(`[StockService] Fundamentals für ${ticker} veraltet. Hole von AV...`);
         const fundamentalsRaw = await alphaVantageRepo.getFundamentalsOverview(ticker);
         const mappedFundamentals = this._mapAlphaVantageFundamentals(fundamentalsRaw);
         
@@ -126,7 +127,7 @@ class StockService {
         const obvRaw = await alphaVantageRepo.getOBV(ticker);
         obvData = this._mapAlphaVantageOBV(obvRaw);
       } catch (err) {
-        console.warn(`[StockService] OBV konnte für ${ticker} nicht geladen werden:`, err.message);
+        Logger.warn(`[StockService] OBV konnte für ${ticker} nicht geladen werden: ${err.message}`);
       }
 
       // 6. KORRELATIONEN (Basiswerte wie BTC, Gold etc.)
@@ -144,7 +145,7 @@ class StockService {
                       correlation_score: corr.correlation_score
                   });
               } catch (err) {
-                  console.warn(`[StockService] Konnte Korrelations-Daten für ${corr.linked_ticker} nicht laden:`, err.message);
+                  Logger.warn(`[StockService] Konnte Korrelations-Daten für ${corr.linked_ticker} nicht laden: ${err.message}`);
               }
           }
       }
@@ -165,7 +166,7 @@ class StockService {
       };
 
     } catch (error) {
-      console.error(`[StockService] Fehler beim Laden der Daten für ${ticker}:`, error.message);
+      Logger.error(`[StockService] Fehler beim Laden der Daten für ${ticker}: ${error.message}`);
       throw error; 
     }
   }
@@ -182,7 +183,7 @@ class StockService {
       const mainHistory = await historicalDataDAO.getHistoryForChart(ticker);
       if (mainHistory.length < 10) return;
 
-      console.log(`[StockService] Berechne Korrelationen für ${ticker} neu...`);
+      Logger.info(`[StockService] Berechne Korrelationen für ${ticker} neu...`);
 
       for (const corr of correlations) {
         const linkedHistory = await historicalDataDAO.getHistoryForChart(corr.linked_ticker);
@@ -196,11 +197,11 @@ class StockService {
             result.correlation
           );
           
-          console.log(`[StockService] Korrelation ${ticker} <-> ${corr.linked_ticker}: ${result.correlation} (${result.quality})`);
+          Logger.info(`[StockService] Korrelation ${ticker} <-> ${corr.linked_ticker}: ${result.correlation} (${result.quality})`);
         }
       }
     } catch (err) {
-      console.error(`[StockService] Fehler bei der Korrelations-Berechnung für ${ticker}:`, err.message);
+      Logger.error(`[StockService] Fehler bei der Korrelations-Berechnung für ${ticker}: ${err.message}`);
     }
   }
 
@@ -242,7 +243,7 @@ class StockService {
     const data = Array.isArray(rawData) ? rawData : (rawData.data || []);
     
     if (data.length === 0) {
-        console.warn("StockService: MassiveRepo lieferte leeres Array für Ticker");
+        Logger.warn("StockService: MassiveRepo lieferte leeres Array für Ticker");
     }
 
     return data.map(item => ({

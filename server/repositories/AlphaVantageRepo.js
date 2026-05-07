@@ -1,6 +1,7 @@
 // server/repositories/AlphaVantageRepo.js
 const axios = require('axios');
 const requestManager = require('../services/RequestManager');
+const Logger = require('../utils/Logger');
 
 class AlphaVantageRepo {
   constructor() {
@@ -41,7 +42,7 @@ class AlphaVantageRepo {
       outputsize: 'full' // 'full' holt bis zu 20 Jahre, 'compact' nur 100 Tage.
     });
 
-    console.log(`[AlphaVantageRepo] Queueing History for ${ticker} (P2)`);
+    Logger.info(`[AlphaVantageRepo] Queueing History for ${ticker} (P2)`);
     return requestManager.enqueue('P2', this.providerName, task);
   }
 
@@ -55,7 +56,7 @@ class AlphaVantageRepo {
       limit: 50 // Holt die letzten 50 relevanten News
     });
 
-    console.log(`[AlphaVantageRepo] Queueing Sentiment for ${ticker} (P3)`);
+    Logger.info(`[AlphaVantageRepo] Queueing Sentiment for ${ticker} (P3)`);
     return requestManager.enqueue('P3', this.providerName, task);
   }
 
@@ -75,7 +76,7 @@ class AlphaVantageRepo {
       symbol: ticker
     });
 
-    console.log(`[AlphaVantageRepo] Queueing Company Overview for ${ticker} (P3)`);
+    Logger.info(`[AlphaVantageRepo] Queueing Company Overview for ${ticker} (P3)`);
     return requestManager.enqueue('P3', this.providerName, task);
   }
 
@@ -89,7 +90,7 @@ class AlphaVantageRepo {
       interval: interval
     });
 
-    console.log(`[AlphaVantageRepo] Queueing OBV for ${ticker} (P3)`);
+    Logger.info(`[AlphaVantageRepo] Queueing OBV for ${ticker} (P3)`);
     return requestManager.enqueue('P3', this.providerName, task);
   }
 }
