@@ -69,6 +69,25 @@ class BackendService {
     }
 
     /**
+     * Holt gezielt Markt-Korrelationen (BTC, Gold) für einen Ticker.
+     * GET /api/intelligence/correlations/:symbol
+     */
+    async getMarketCorrelations(ticker) {
+        try {
+            const response = await fetch(`${this.baseUrl}/intelligence/correlations/${ticker}`);
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                console.warn(`[BackendService] Korrelations-Fehler für ${ticker}:`, errData.error || 'Unbekannt');
+                return null;
+            }
+            return await response.json();
+        } catch (error) {
+            console.error(`[BackendService] Fehler bei getMarketCorrelations für ${ticker}:`, error);
+            return null;
+        }
+    }
+
+    /**
      * Holt gezielt Fundamentaldaten für einen Ticker.
      */
     async getFundamentals(ticker) {

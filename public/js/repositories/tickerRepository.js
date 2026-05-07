@@ -13,12 +13,18 @@ window.StockMaster.TickerRepository = (function() {
             return Promise.resolve();
         },
 
-        // KRITISCH: Diese Funktion wurde vom chart.js vermisst
+        /**
+         * Holt historische Chart-Daten über den Intelligence-Endpunkt
+         */
         async getChartData(symbol) {
             try {
-                const response = await fetch(`/api/charts/${symbol}`);
+                // Pfad korrigiert: Nutzt den Intelligence-Endpunkt, da /api/charts/ nicht existiert.
+                const response = await fetch(`/api/intelligence/${symbol}`);
                 if (!response.ok) throw new Error('Chart-Ladefehler');
-                return await response.json();
+                
+                const data = await response.json();
+                // Intelligence-Endpunkt liefert ein Objekt { ticker, history, ... }
+                return data.history || [];
             } catch (error) {
                 console.error('❌ TickerRepository (GET Chart):', error);
                 return [];

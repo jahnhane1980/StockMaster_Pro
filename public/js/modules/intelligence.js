@@ -34,7 +34,17 @@ window.StockMaster.IntelligenceModule = (() => {
         }
 
         try {
-            const data = await window.backendService.getIntelligenceData(symbol);
+            // Parallel: Hauptdaten und die neuen Markt-Korrelationen (BTC/Gold) laden
+            const [data, marketCorrelations] = await Promise.all([
+                window.backendService.getIntelligenceData(symbol),
+                window.backendService.getMarketCorrelations(symbol)
+            ]);
+
+            // Korrelationen im Daten-Objekt ergänzen (falls vorhanden)
+            if (marketCorrelations && marketCorrelations.correlations) {
+                data.marketCorrelations = marketCorrelations.correlations;
+            }
+
             updateUI(data);
 
             if (window.StockMaster.Events) {
@@ -108,9 +118,34 @@ window.StockMaster.IntelligenceModule = (() => {
             if (sentimentIndicator) sentimentIndicator.style.left = "50%";
         }
 
+        // Korrelationen anzeigen (Watchlist-Verknüpfungen UND Markt-Benchmarks)
         if (correlationsList) {
+            let html = '';
+
+            // 1. Markt-Benchmarks (BTC, Gold) zuerst anzeigen, falls vorhanden
+            if (data.marketCorrelations) {
+                const mc = data.marketCorrelations;
+                if (mc.btc) {
+                    html += `
+                        <div class="correlation-item benchmark">
+                            <span class="label">Korrelation zu BTC:</span>
+                            <span class="value" title="${mc.btc.quality}">${mc.btc.correlation.toFixed(2)}</span>
+                        </div>
+                    `;
+                }
+                if (mc.gold) {
+                    html += `
+                        <div class="correlation-item benchmark">
+                            <span class="label">Korrelation zu Gold:</span>
+                            <span class="value" title="${mc.gold.quality}">${mc.gold.correlation.toFixed(2)}</span>
+                        </div>
+                    `;
+                }
+            }
+
+            // 2. Watchlist-Verknüpfungen
             if (data.correlations && data.correlations.length > 0) {
-                correlationsList.innerHTML = data.correlations.map(corr => {
+                html += data.correlations.map(corr => {
                     const score = corr.correlation_score || 0;
                     return `
                         <div class="correlation-item">
@@ -120,8 +155,12 @@ window.StockMaster.IntelligenceModule = (() => {
                         </div>
                     `;
                 }).join('');
+            }
+
+            if (html === '') {
+                correlationsList.textContent = 'Keine Korrelationen verfügbar.';
             } else {
-                correlationsList.textContent = 'Keine Korrelationen verknüpft.';
+                correlationsList.innerHTML = html;
             }
         }
 
