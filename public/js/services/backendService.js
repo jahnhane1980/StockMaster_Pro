@@ -1,4 +1,4 @@
-// public/js/services/backendService.js
+// public/js/services/BackendService.js
 
 class BackendService {
     constructor() {
@@ -14,7 +14,7 @@ class BackendService {
      */
     async addTickerToWatchlist(ticker) {
         try {
-            // HINWEIS: Wenn du lieber deine eigene httpClient.js nutzt, kannst du fetch hier austauschen.
+            // HINWEIS: Wenn du lieber deine eigene HttpClient.js nutzt, kannst du fetch hier austauschen.
             const response = await fetch(`${this.baseUrl}/watchlist`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -49,7 +49,7 @@ class BackendService {
             if (response.status === 429) {
                 const errData = await response.json().catch(() => ({}));
                 
-                // Wir werfen einen speziellen Error, den du in intelligence.js fangen 
+                // Wir werfen einen speziellen Error, den du in Intelligence.js fangen 
                 // und über deinen notificationService.js als Warnung anzeigen kannst.
                 const limitError = new Error(errData.error || 'Provider API-Limit erreicht');
                 limitError.isLimitError = true;

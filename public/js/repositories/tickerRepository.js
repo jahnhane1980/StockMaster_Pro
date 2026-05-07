@@ -1,73 +1,69 @@
 /**
  * StockMaster TickerRepository (Frontend)
- * Kommuniziert mit der Node.js API
+ * Kommuniziert mit der Node.js API unter Verwendung des HttpClient.
+ * Gemäß Regel 1: Keine direkte Rückgabe von Daten an die UI, Kommunikation via Events.
  */
 window.StockMaster = window.StockMaster || {};
 
 window.StockMaster.TickerRepository = (function() {
-    const apiUrl = '/api/tickers';
+  const API_URL = '/api/tickers';
 
-    return {
-        async init() {
-            console.log('📡 TickerRepository: API-Modus initialisiert');
-            return Promise.resolve();
-        },
+  /**
+   * Hilfsfunktion zum Abfeuern von Events.
+   * @param {string} eventName - Name des Events.
+   * @param {any} detail - Daten, die mit dem Event gesendet werden.
+   */
+  function dispatch(eventName, detail = {}) {
+    if (window.StockMaster.Events) {
+      document.dispatchEvent(new CustomEvent(eventName, { detail }));
+    }
+  }
 
-        /**
-         * Holt historische Chart-Daten über den Intelligence-Endpunkt
-         */
-        async getChartData(symbol) {
-            try {
-                // Pfad korrigiert: Nutzt den Intelligence-Endpunkt, da /api/charts/ nicht existiert.
-                const response = await fetch(`/api/intelligence/${symbol}`);
-                if (!response.ok) throw new Error('Chart-Ladefehler');
-                
-                const data = await response.json();
-                // Intelligence-Endpunkt liefert ein Objekt { ticker, history, ... }
-                return data.history || [];
-            } catch (error) {
-                console.error('❌ TickerRepository (GET Chart):', error);
-                return [];
-            }
-        },
+  return {
+    /**
+     * Initialisiert das Repository.
+     * @returns {Promise<void>}
+     */
+    async init() {
+      console.log('📡 TickerRepository: API-Modus initialisiert');
+      return Promise.resolve();
+    },
 
-        async getAllTickers() {
-            try {
-                const response = await fetch(apiUrl);
-                if (!response.ok) throw new Error('API-Ladefehler');
-                return await response.json();
-            } catch (error) {
-                console.error('❌ TickerRepository (GET):', error);
-                return [];
-            }
-        },
+    /**
+     * Holt historische Chart-Daten über den Intelligence-Endpunkt.
+     * Feuert CHART_DATA_READY bei Erfolg.
+     * @param {string} symbol - Das Aktiensymbol.
+     * @returns {Promise<void>}
+     */
+    async getChartData(symbol) {
+      const data = await window.StockMaster.HttpClient.get(`/api/intelligence/${symbol}`);
+      
+      dispatch(window.StockMaster.Events.CHART_DATA_READY, {
+        symbol: symbol,
+        history: data.history || [],
+        correlations: data.correlations || []
+      });
+    },
 
-        async addTicker(tickerData) {
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(tickerData)
-                });
-                if (!response.ok) throw new Error('Speichern fehlgeschlagen');
-                return await response.json();
-            } catch (error) {
-                console.error('❌ TickerRepository (POST):', error);
-                throw error;
-            }
-        },
+    /**
+     * Holt alle Ticker aus der Watchlist.
+     * Feuert TICKERS_LOADED bei Erfolg.
+     * @returns {Promise<void>}
+     */
+    async getAllTickers() {
+      const data = await window.StockMaster.HttpClient.get(API_URL);
+      dispatch(window.StockMaster.Events.TICKERS_LOADED, { tickers: data });
+    },
 
-        async deleteTicker(symbol) {
-            try {
-                const response = await fetch(`${apiUrl}/${symbol}`, {
-                    method: 'DELETE'
-                });
-                if (!response.ok) throw new Error('Löschen fehlgeschlagen');
-                return await response.json();
-            } catch (error) {
-                console.error('❌ TickerRepository (DELETE):', error);
-                throw error;
-            }
-        }
-    };
+    /**
+     * Löscht einen Ticker aus der Watchlist.
+     * Feuert TICKER_DELETED bei Erfolg.
+     * @param {string} symbol - Das zu löschende Symbol.
+     * @returns {Promise<void>}
+     */
+    async deleteTicker(symbol) {
+      await window.StockMaster.HttpClient.delete(`${API_URL}/${symbol}`);
+      dispatch(window.StockMaster.Events.TICKER_DELETED, { symbol });
+    }
+  };
 })();

@@ -1,8 +1,8 @@
-// server/controllers/watchlistController.js
+// server/controllers/WatchlistController.js
 const { db } = require('../db/Database');
-const TickerRepository = require('../repositories/tickerRepository');
-const stockService = require('../services/StockService');
-const intelligenceDAO = require('../models/IntelligenceDAO');
+const TickerRepository = require('../repositories/TickerRepository');
+const StockService = require('../services/StockService');
+const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
 
 class WatchlistController {
@@ -32,7 +32,7 @@ class WatchlistController {
       
       // 2. Hintergrund-Sync anstoßen (ohne await, um UI nicht zu blockieren)
       // Der StockService kümmert sich um das Abrufen und Persistieren aller Daten.
-      stockService.syncTickerData(ticker).catch(e => {
+      StockService.syncTickerData(ticker).catch(e => {
         Logger.error(`[WatchlistController] Hintergrund-Sync Fehler für ${ticker}: ${e.message}`);
       });
 
@@ -59,7 +59,7 @@ class WatchlistController {
     }
 
     try {
-      intelligenceDAO.upsertCorrelation(
+      IntelligenceDAO.upsertCorrelation(
         mainTicker.toUpperCase(), 
         linkedTicker.toUpperCase(), 
         score || 0
@@ -80,7 +80,7 @@ class WatchlistController {
     const ticker = req.params.ticker.toUpperCase();
 
     try {
-      const intelligenceData = await stockService.getIntelligenceData(ticker);
+      const intelligenceData = await StockService.getIntelligenceData(ticker);
       return res.status(200).json(intelligenceData);
     } catch (error) {
       if (error.message.includes('Limit Reached') || error.message.includes('429')) {

@@ -1,4 +1,4 @@
-// public/js/modules/chart.js
+// public/js/modules/Chart.js
 
 window.StockMaster = window.StockMaster || {};
 window.StockMaster.ChartModule = (() => {

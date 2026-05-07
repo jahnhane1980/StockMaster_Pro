@@ -1,10 +1,10 @@
 // server/services/StockService.js
-const alphaVantageRepo = require('../repositories/AlphaVantageRepo');
+const AlphaVantageRepo = require('../repositories/AlphaVantageRepo');
 const MassiveRepo = require('../repositories/MassiveRepo');
 const RequestManager = require('./RequestManager');
-const analysisService = require('./AnalysisService');
-const historicalDataDAO = require('../models/HistoricalDataDAO');
-const intelligenceDAO = require('../models/IntelligenceDAO');
+const AnalysisService = require('./AnalysisService');
+const HistoricalDataDAO = require('../models/HistoricalDataDAO');
+const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
 
 class StockService {
@@ -32,11 +32,11 @@ class StockService {
           Logger.warn(`[Sync] Realtime-Fehler für ${ticker}: ${err.message}`);
           return null;
         }),
-        alphaVantageRepo.getDailyHistory(ticker).catch(err => {
+        AlphaVantageRepo.getDailyHistory(ticker).catch(err => {
           Logger.warn(`[Sync] Historie-Fehler für ${ticker}: ${err.message}`);
           return null;
         }),
-        alphaVantageRepo.getNewsSentiment(ticker).catch(err => {
+        AlphaVantageRepo.getNewsSentiment(ticker).catch(err => {
           Logger.warn(`[Sync] Sentiment-Fehler für ${ticker}: ${err.message}`);
           return null;
         })
@@ -45,13 +45,13 @@ class StockService {
       // 2. Historie persistieren (falls erfolgreich geladen)
       if (historyRaw) {
         const mappedHistory = this._mapAlphaVantageHistory(historyRaw);
-        await historicalDataDAO.insertMany(ticker, mappedHistory, 'AV');
+        await HistoricalDataDAO.insertMany(ticker, mappedHistory, 'AV');
       }
 
       // 3. News-Sentiment persistieren (falls erfolgreich geladen)
       if (sentimentRaw && sentimentRaw.feed) {
         const mappedSentiment = this._mapAlphaVantageSentiment(sentimentRaw, ticker);
-        await intelligenceDAO.insertSentiment(ticker, mappedSentiment);
+        await IntelligenceDAO.insertSentiment(ticker, mappedSentiment);
       }
 
       Logger.info(`[StockService] Sync für ${ticker} erfolgreich abgeschlossen.`);
@@ -84,54 +84,54 @@ class StockService {
       }
 
       // 2. HISTORISCHE DATEN (Hybrid-Logik: AV vs. Massive)
-      const lastRecordDate = await historicalDataDAO.getLastRecordDate(ticker);
+      const lastRecordDate = await HistoricalDataDAO.getLastRecordDate(ticker);
       const todayStr = new Date().toISOString().split('T')[0];
 
       if (!lastRecordDate) {
         // Fall A: Keine Daten vorhanden -> Initiale Betankung (5 Jahre) über Alpha Vantage
         Logger.info(`[StockService] Keine Historie für ${ticker}. Hole 5 Jahre von AV...`);
-        const historyRaw = await alphaVantageRepo.getDailyHistory(ticker);
+        const historyRaw = await AlphaVantageRepo.getDailyHistory(ticker);
         const mappedHistory = this._mapAlphaVantageHistory(historyRaw);
-        await historicalDataDAO.insertMany(ticker, mappedHistory, 'AV');
+        await HistoricalDataDAO.insertMany(ticker, mappedHistory, 'AV');
         
       } else if (lastRecordDate < todayStr) {
         // Fall B: Daten vorhanden, aber Lücke -> Update über Massive
         Logger.info(`[StockService] Historie für ${ticker} veraltet (Stand: ${lastRecordDate}). Hole Diffs von Massive...`);
         const historyRaw = await MassiveRepo.getHistoricalData(ticker, lastRecordDate, todayStr);
         const mappedHistory = this._mapMassiveHistory(historyRaw);
-        await historicalDataDAO.insertMany(ticker, mappedHistory, 'MASSIVE');
+        await HistoricalDataDAO.insertMany(ticker, mappedHistory, 'MASSIVE');
       }
 
       // Lade die nun vollständige Historie aus unserer SQLite-Datenbank für das Chart
-      const finalHistory = await historicalDataDAO.getHistoryForChart(ticker);
+      const finalHistory = await HistoricalDataDAO.getHistoryForChart(ticker);
 
       // 3. FUNDAMENTALDATEN HOLEN & UPDATEN
-      let metadata = await intelligenceDAO.getMetadata(ticker);
+      let metadata = await IntelligenceDAO.getMetadata(ticker);
       
       if (!metadata || this._isDataStale(metadata.last_updated_fundamentals, 30)) {
         // Fundamentaldaten fehlen oder sind älter als 30 Tage -> AV fragen
         Logger.info(`[StockService] Fundamentals für ${ticker} veraltet. Hole von AV...`);
-        const fundamentalsRaw = await alphaVantageRepo.getFundamentalsOverview(ticker);
+        const fundamentalsRaw = await AlphaVantageRepo.getFundamentalsOverview(ticker);
         const mappedFundamentals = this._mapAlphaVantageFundamentals(fundamentalsRaw);
         
-        await intelligenceDAO.upsertMetadata(ticker, mappedFundamentals);
-        metadata = await intelligenceDAO.getMetadata(ticker); // Frisch aus der DB laden
+        await IntelligenceDAO.upsertMetadata(ticker, mappedFundamentals);
+        metadata = await IntelligenceDAO.getMetadata(ticker); // Frisch aus der DB laden
       }
 
       // 4. SENTIMENT (Die im Hintergrund geladenen Scores aus der DB holen)
-      const sentimentHistory = await intelligenceDAO.getLatestSentiment(ticker, 5);
+      const sentimentHistory = await IntelligenceDAO.getLatestSentiment(ticker, 5);
 
       // 5. TECHNISCHE INDIKATOREN (OBV)
       let obvData = null;
       try {
-        const obvRaw = await alphaVantageRepo.getOBV(ticker);
+        const obvRaw = await AlphaVantageRepo.getOBV(ticker);
         obvData = this._mapAlphaVantageOBV(obvRaw);
       } catch (err) {
         Logger.warn(`[StockService] OBV konnte für ${ticker} nicht geladen werden: ${err.message}`);
       }
 
       // 6. KORRELATIONEN (Basiswerte wie BTC, Gold etc.)
-      const correlations = await intelligenceDAO.getCorrelations(ticker);
+      const correlations = await IntelligenceDAO.getCorrelations(ticker);
       const linkedData = [];
 
       if (correlations && correlations.length > 0) {
@@ -177,21 +177,21 @@ class StockService {
    */
   async recalculateCorrelations(ticker) {
     try {
-      const correlations = await intelligenceDAO.getCorrelations(ticker);
+      const correlations = await IntelligenceDAO.getCorrelations(ticker);
       if (!correlations || correlations.length === 0) return;
 
-      const mainHistory = await historicalDataDAO.getHistoryForChart(ticker);
+      const mainHistory = await HistoricalDataDAO.getHistoryForChart(ticker);
       if (mainHistory.length < 10) return;
 
       Logger.info(`[StockService] Berechne Korrelationen für ${ticker} neu...`);
 
       for (const corr of correlations) {
-        const linkedHistory = await historicalDataDAO.getHistoryForChart(corr.linked_ticker);
+        const linkedHistory = await HistoricalDataDAO.getHistoryForChart(corr.linked_ticker);
         
         if (linkedHistory.length >= 10) {
-          const result = analysisService.calculateCorrelation(mainHistory, linkedHistory);
+          const result = AnalysisService.calculateCorrelation(mainHistory, linkedHistory);
           
-          await intelligenceDAO.upsertCorrelation(
+          await IntelligenceDAO.upsertCorrelation(
             ticker, 
             corr.linked_ticker, 
             result.correlation

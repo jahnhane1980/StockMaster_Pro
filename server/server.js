@@ -4,14 +4,14 @@ const path = require('path');
 const { initDB } = require('./db/Database');
 
 // Repositories
-const TickerRepository = require('./repositories/tickerRepository');
+const TickerRepository = require('./repositories/TickerRepository');
 const AlphaVantageRepo = require('./repositories/AlphaVantageRepo');
 
 // Services
 const RequestManager = require('./services/RequestManager');
 
 // Controllers
-const WatchlistController = require('./controllers/watchlistController');
+const WatchlistController = require('./controllers/WatchlistController');
 const IntelligenceController = require('./controllers/IntelligenceController');
 
 const app = express();

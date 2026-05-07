@@ -1,186 +1,166 @@
-// public/js/modules/intelligence.js
+// public/js/modules/Intelligence.js
 
 window.StockMaster = window.StockMaster || {};
 window.StockMaster.IntelligenceModule = (() => {
 
-    const boardPanel = document.getElementById('intelligence-board');
-    const emptyStatePanel = document.getElementById('empty-state');
-    const boardTickerName = document.getElementById('board-ticker-name');
-    const boardPrice = document.getElementById('board-price');
-    const boardChange = document.getElementById('board-change');
-    const valMcap = document.getElementById('val-mcap');
-    const valDebt = document.getElementById('val-debt');
-    const valRev = document.getElementById('val-rev');
-    const sentimentIndicator = document.getElementById('sentiment-indicator');
-    const sentimentText = document.getElementById('sentiment-text');
-    const correlationsList = document.getElementById('correlations-list');
-    const valObv = document.getElementById('val-obv');
+  const boardPanel = document.getElementById('intelligence-board');
+  const emptyStatePanel = document.getElementById('empty-state');
+  const boardTickerName = document.getElementById('board-ticker-name');
+  const boardPrice = document.getElementById('board-price');
+  const boardChange = document.getElementById('board-change');
+  const valMcap = document.getElementById('val-mcap');
+  const valDebt = document.getElementById('val-debt');
+  const valRev = document.getElementById('val-rev');
+  const sentimentIndicator = document.getElementById('sentiment-indicator');
+  const sentimentText = document.getElementById('sentiment-text');
+  const correlationsList = document.getElementById('correlations-list');
+  const valObv = document.getElementById('val-obv');
 
-    const init = () => {
-        if (window.StockMaster.Events) {
-            document.addEventListener(window.StockMaster.Events.TICKER_SELECTED, handleTickerSelected);
-            console.log('[IntelligenceModule] Initialisiert.');
-        }
-    };
+  let currentData = null;
 
-    const handleTickerSelected = async (event) => {
-        const symbol = event.detail?.symbol;
-        if (!symbol) return;
+  const init = () => {
+    if (window.StockMaster.Events) {
+      // Höre auf Ticker-Auswahl aus der Watchlist
+      document.addEventListener(window.StockMaster.Events.TICKER_SELECTED, handleTickerSelected);
+      
+      // Höre auf Daten-Eingang vom Repository
+      document.addEventListener(window.StockMaster.Events.INTELLIGENCE_DATA_LOADED, handleDataLoaded);
+      document.addEventListener(window.StockMaster.Events.MARKET_CORRELATIONS_LOADED, handleCorrelationsLoaded);
+      
+      console.log('[IntelligenceModule] Initialisiert und Listener registriert.');
+    }
+  };
 
-        if (boardPanel) boardPanel.classList.add('hidden');
-        if (emptyStatePanel) {
-            emptyStatePanel.classList.remove('hidden');
-            emptyStatePanel.textContent = `Lade Intelligence-Daten für ${symbol}...`;
-        }
+  /**
+   * Wird getriggert, wenn ein Ticker in der Watchlist ausgewählt wird.
+   */
+  const handleTickerSelected = (event) => {
+    const symbol = event.detail?.symbol;
+    if (!symbol) return;
 
-        try {
-            // Parallel: Hauptdaten und die neuen Markt-Korrelationen (BTC/Gold) laden
-            const [data, marketCorrelations] = await Promise.all([
-                window.backendService.getIntelligenceData(symbol),
-                window.backendService.getMarketCorrelations(symbol)
-            ]);
+    currentData = null; // Reset
+    if (boardPanel) boardPanel.classList.add('hidden');
+    if (emptyStatePanel) {
+      emptyStatePanel.classList.remove('hidden');
+      emptyStatePanel.textContent = `Lade Intelligence-Daten für ${symbol}...`;
+    }
 
-            // Korrelationen im Daten-Objekt ergänzen (falls vorhanden)
-            if (marketCorrelations && marketCorrelations.correlations) {
-                data.marketCorrelations = marketCorrelations.correlations;
-            }
+    // Repository-Anfragen triggern (SoC: Keine Await-Logik hier)
+    if (window.StockMaster.IntelligenceRepository) {
+      window.StockMaster.IntelligenceRepository.getForSymbol(symbol);
+      window.StockMaster.IntelligenceRepository.getCorrelations(symbol);
+    }
+  };
 
-            updateUI(data);
+  /**
+   * Verarbeitet die Haupt-Intelligence-Daten.
+   */
+  const handleDataLoaded = (event) => {
+    currentData = event.detail;
+    updateUI();
 
-            if (window.StockMaster.Events) {
-                document.dispatchEvent(new CustomEvent(window.StockMaster.Events.CHART_DATA_READY, { 
-                    detail: { 
-                        symbol: data.ticker,
-                        history: data.history || [],
-                        correlations: data.correlations || []
-                    } 
-                }));
-            }
+    // Chart-Update triggern
+    if (window.StockMaster.Events) {
+      document.dispatchEvent(new CustomEvent(window.StockMaster.Events.CHART_DATA_READY, { 
+        detail: { 
+          symbol: currentData.ticker,
+          history: currentData.history || [],
+          correlations: currentData.correlations || []
+        } 
+      }));
+    }
+  };
 
-        } catch (error) {
-            console.error('[IntelligenceModule] Fehler beim Laden der Daten:', error);
-            
-            if (emptyStatePanel) {
-                emptyStatePanel.textContent = error.isLimitError 
-                    ? 'API-Limit erreicht. Bitte später versuchen.' 
-                    : 'Fehler beim Laden der Daten.';
-            }
+  /**
+   * Verarbeitet die Markt-Korrelationen (BTC/Gold).
+   */
+  const handleCorrelationsLoaded = (event) => {
+    if (!currentData) return;
+    currentData.marketCorrelations = event.detail.correlations;
+    updateUI();
+  };
 
-            if (window.StockMaster.Events) {
-                document.dispatchEvent(new CustomEvent(window.StockMaster.Events.GLOBAL_NOTIFICATION, {
-                    detail: {
-                        type: error.isLimitError ? 'warning' : 'error',
-                        message: error.message
-                    }
-                }));
-            }
-        }
-    };
+  /**
+   * Zentrale UI-Update Funktion.
+   */
+  const updateUI = () => {
+    if (!currentData) return;
 
-    const updateUI = (data) => {
-        if (emptyStatePanel) emptyStatePanel.classList.add('hidden');
-        if (boardPanel) boardPanel.classList.remove('hidden');
+    if (emptyStatePanel) emptyStatePanel.classList.add('hidden');
+    if (boardPanel) boardPanel.classList.remove('hidden');
 
-        if (boardTickerName) boardTickerName.textContent = data.ticker;
-        
-        if (boardPrice) {
-            boardPrice.textContent = data.currentPrice ? `$${data.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
-        }
-        
-        if (boardChange) {
-            const changeVal = data.change || 0;
-            boardChange.textContent = `${changeVal > 0 ? '+' : ''}${changeVal.toFixed(2)}%`;
-            boardChange.className = changeVal >= 0 ? 'positive' : 'negative'; 
-        }
+    if (boardTickerName) boardTickerName.textContent = currentData.ticker;
+    
+    if (boardPrice) {
+      boardPrice.textContent = currentData.currentPrice ? `$${currentData.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
+    }
+    
+    if (boardChange) {
+      const changeVal = currentData.change || 0;
+      boardChange.textContent = `${changeVal > 0 ? '+' : ''}${changeVal.toFixed(2)}%`;
+      boardChange.className = changeVal >= 0 ? 'positive' : 'negative'; 
+    }
 
-        if (data.fundamentals) {
-            if (valMcap) valMcap.textContent = data.fundamentals.market_cap ? formatLargeNumber(data.fundamentals.market_cap) : 'N/A';
-            if (valDebt) valDebt.textContent = data.fundamentals.debt_equity ? data.fundamentals.debt_equity.toFixed(2) : 'N/A';
-            if (valRev) valRev.textContent = data.fundamentals.revenue_growth ? `${(data.fundamentals.revenue_growth * 100).toFixed(2)}%` : 'N/A';
-        } else {
-            [valMcap, valDebt, valRev].forEach(el => { if(el) el.textContent = 'N/A'; });
-        }
+    if (currentData.fundamentals) {
+      if (valMcap) valMcap.textContent = currentData.fundamentals.market_cap ? formatLargeNumber(currentData.fundamentals.market_cap) : 'N/A';
+      if (valDebt) valDebt.textContent = currentData.fundamentals.debt_equity ? currentData.fundamentals.debt_equity.toFixed(2) : 'N/A';
+      if (valRev) valRev.textContent = currentData.fundamentals.revenue_growth ? `${(currentData.fundamentals.revenue_growth * 100).toFixed(2)}%` : 'N/A';
+    }
 
-        if (data.sentiment && data.sentiment.length > 0) {
-            const latestScore = data.sentiment[0].sentiment_score; 
-            if (sentimentText) {
-                let status = 'Neutral';
-                if (latestScore > 0.15) status = 'Bullish';
-                else if (latestScore < -0.15) status = 'Bearish';
-                sentimentText.textContent = `${status} (${latestScore.toFixed(2)})`;
-            }
-            if (sentimentIndicator) {
-                const positionPercent = ((latestScore + 1) / 2) * 100;
-                sentimentIndicator.style.left = `${positionPercent}%`;
-            }
-        } else {
-            if (sentimentText) sentimentText.textContent = "Keine News-Daten verfügbar.";
-            if (sentimentIndicator) sentimentIndicator.style.left = "50%";
-        }
+    if (currentData.sentiment && currentData.sentiment.length > 0) {
+      const latestScore = currentData.sentiment[0].sentiment_score; 
+      if (sentimentText) {
+        let status = 'Neutral';
+        if (latestScore > 0.15) status = 'Bullish';
+        else if (latestScore < -0.15) status = 'Bearish';
+        sentimentText.textContent = `${status} (${latestScore.toFixed(2)})`;
+      }
+      if (sentimentIndicator) {
+        const positionPercent = ((latestScore + 1) / 2) * 100;
+        sentimentIndicator.style.left = `${positionPercent}%`;
+      }
+    }
 
-        // Korrelationen anzeigen (Watchlist-Verknüpfungen UND Markt-Benchmarks)
-        if (correlationsList) {
-            let html = '';
+    renderCorrelations();
 
-            // 1. Markt-Benchmarks (BTC, Gold) zuerst anzeigen, falls vorhanden
-            if (data.marketCorrelations) {
-                const mc = data.marketCorrelations;
-                if (mc.btc) {
-                    html += `
-                        <div class="correlation-item benchmark">
-                            <span class="label">Korrelation zu BTC:</span>
-                            <span class="value" title="${mc.btc.quality}">${mc.btc.correlation.toFixed(2)}</span>
-                        </div>
-                    `;
-                }
-                if (mc.gold) {
-                    html += `
-                        <div class="correlation-item benchmark">
-                            <span class="label">Korrelation zu Gold:</span>
-                            <span class="value" title="${mc.gold.quality}">${mc.gold.correlation.toFixed(2)}</span>
-                        </div>
-                    `;
-                }
-            }
+    if (valObv && currentData.indicators?.obv) {
+      valObv.textContent = currentData.indicators.obv.value.toLocaleString();
+    }
+  };
 
-            // 2. Watchlist-Verknüpfungen
-            if (data.correlations && data.correlations.length > 0) {
-                html += data.correlations.map(corr => {
-                    const score = corr.correlation_score || 0;
-                    return `
-                        <div class="correlation-item">
-                            <span title="Score: ${score}">${corr.symbol} (${score.toFixed(2)})</span>
-                            <span>$${corr.price.toFixed(2)}</span>
-                            <span class="${corr.change >= 0 ? 'positive' : 'negative'}">${corr.change > 0 ? '+' : ''}${corr.change.toFixed(2)}%</span>
-                        </div>
-                    `;
-                }).join('');
-            }
+  const renderCorrelations = () => {
+    if (!correlationsList || !currentData) return;
+    let html = '';
 
-            if (html === '') {
-                correlationsList.textContent = 'Keine Korrelationen verfügbar.';
-            } else {
-                correlationsList.innerHTML = html;
-            }
-        }
+    if (currentData.marketCorrelations) {
+      const mc = currentData.marketCorrelations;
+      if (mc.btc) {
+        html += `<div class="correlation-item benchmark"><span class="label">BTC:</span><span class="value">${mc.btc.correlation.toFixed(2)}</span></div>`;
+      }
+      if (mc.gold) {
+        html += `<div class="correlation-item benchmark"><span class="label">Gold:</span><span class="value">${mc.gold.correlation.toFixed(2)}</span></div>`;
+      }
+    }
 
-        if (valObv) {
-            if (data.indicators && data.indicators.obv) {
-                valObv.textContent = data.indicators.obv.value.toLocaleString();
-            } else {
-                valObv.textContent = 'N/A';
-            }
-        }
-    };
+    if (currentData.correlations?.length > 0) {
+      html += currentData.correlations.map(corr => `
+        <div class="correlation-item">
+          <span>${corr.symbol}</span>
+          <span class="${corr.change >= 0 ? 'positive' : 'negative'}">${corr.change.toFixed(2)}%</span>
+        </div>
+      `).join('');
+    }
 
-    const formatLargeNumber = (num) => {
-        if (!num) return 'N/A';
-        const n = parseFloat(num);
-        if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
-        if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
-        if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
-        return n.toLocaleString();
-    };
+    correlationsList.innerHTML = html || 'Keine Daten.';
+  };
 
-    return { init };
+  const formatLargeNumber = (num) => {
+    const n = parseFloat(num);
+    if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
+    if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+    if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+    return n.toLocaleString();
+  };
+
+  return { init };
 })();

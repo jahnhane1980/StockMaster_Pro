@@ -1,60 +1,62 @@
 /**
  * StockMaster Notification Service
- * Revealing Module Pattern
- * Kapselt UI-Logik für globale Toast-Popups (Errors, Success, Warnings).
+ * Kapselt UI-Logik für globale Toast-Popups.
+ * Gemäß Regel 1 SoC: Agiert als Listener für globale Events.
  */
 window.StockMaster = window.StockMaster || {};
 
 window.StockMaster.NotificationService = (function() {
-    // Private Konstante für das Modul
-    const CONTAINER_ID = 'sm-toast-container';
+  const CONTAINER_ID = 'sm-toast-container';
 
-    function init() {
-        createContainer();
-        bindEvents();
-        console.log('StockMaster.NotificationService: Initialisiert.');
+  /**
+   * Initialisiert den Service und registriert Event-Listener.
+   */
+  function init() {
+    createContainer();
+    
+    if (window.StockMaster.Events) {
+      // Höre auf Erfolgsmeldungen
+      document.addEventListener(window.StockMaster.Events.GLOBAL_NOTIFICATION, (e) => {
+        const { type, message } = e.detail;
+        showToast(message, type);
+      });
+
+      // Höre auf globale Fehler-Events (Automatische UI-Anzeige)
+      document.addEventListener(window.StockMaster.Events.ERROR_OCCURRED, (e) => {
+        const { message, isLimitError } = e.detail;
+        showToast(message, isLimitError ? 'warning' : 'error');
+      });
+      
+      console.log('StockMaster.NotificationService: Initialisiert und Listener aktiv.');
     }
+  }
 
-    function createContainer() {
-        if (document.getElementById(CONTAINER_ID)) return;
-        
-        const container = document.createElement('div');
-        container.id = CONTAINER_ID;
-        document.body.appendChild(container);
-    }
+  function createContainer() {
+    if (document.getElementById(CONTAINER_ID)) return;
+    const container = document.createElement('div');
+    container.id = CONTAINER_ID;
+    document.body.appendChild(container);
+  }
 
-    function bindEvents() {
-        document.addEventListener(window.StockMaster.Events.GLOBAL_NOTIFICATION, (e) => {
-            const { type, message } = e.detail;
-            showToast(message, type);
-        });
-    }
+  function showToast(message, type = 'info') {
+    const container = document.getElementById(CONTAINER_ID);
+    if (!container) return;
 
-    function showToast(message, type = 'info') {
-        const container = document.getElementById(CONTAINER_ID);
-        if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `sm-toast ${type}`;
+    toast.textContent = message;
 
-        const toast = document.createElement('div');
-        toast.className = `sm-toast ${type}`;
-        toast.textContent = message;
+    container.appendChild(toast);
 
-        container.appendChild(toast);
+    requestAnimationFrame(() => {
+      toast.classList.add('show');
+    });
 
-        // Nächsten Render-Frame abwarten, damit die CSS Transition greift
-        requestAnimationFrame(() => {
-            toast.classList.add('show');
-        });
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 400); 
+    }, 4000);
+  }
 
-        // Nach 4 Sekunden wieder ausblenden und aus dem DOM entfernen
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => toast.remove(), 400); 
-        }, 4000);
-    }
-
-    // Public API
-    return {
-        init: init,
-        showToast: showToast 
-    };
+  return { init, showToast };
 })();

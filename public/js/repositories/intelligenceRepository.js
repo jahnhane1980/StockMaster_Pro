@@ -1,58 +1,54 @@
 /**
  * StockMaster IntelligenceRepository (Frontend)
+ * Kommuniziert mit der Node.js API unter Verwendung des HttpClient.
+ * Gemäß Regel 1: Kommunikation via Events.
  */
 window.StockMaster = window.StockMaster || {};
 
 window.StockMaster.IntelligenceRepository = (function() {
-    const apiUrl = '/api/intelligence';
+  const API_URL = '/api/intelligence';
 
-    return {
-        async init() {
-            console.log('📡 IntelligenceRepository: Initialisiert.');
-            return Promise.resolve();
-        },
+  /**
+   * Hilfsfunktion zum Abfeuern von Events.
+   * @param {string} eventName - Name des Events.
+   * @param {any} [detail={}] - Daten, die mit dem Event gesendet werden.
+   */
+  function dispatch(eventName, detail = {}) {
+    if (window.StockMaster.Events) {
+      document.dispatchEvent(new CustomEvent(eventName, { detail }));
+    }
+  }
 
-        /**
-         * Holt die allgemeinen Intelligence-Daten (Sentiment, Fundamentals, History)
-         */
-        async getForSymbol(symbol) {
-            try {
-                const response = await fetch(`${apiUrl}/${symbol}`);
-                if (!response.ok) {
-                    throw new Error(`Fehler beim Laden der Intelligence-Daten: ${response.status}`);
-                }
-                return await response.json();
-            } catch (error) {
-                console.error('❌ IntelligenceRepo (GET):', error);
-                return null;
-            }
-        },
+  return {
+    /**
+     * Initialisiert das Repository.
+     * @returns {Promise<void>}
+     */
+    async init() {
+      console.log('📡 IntelligenceRepository: Initialisiert.');
+      return Promise.resolve();
+    },
 
-        /**
-         * Holt Markt-Korrelationen (BTC, Gold) für ein Symbol
-         * GET /api/intelligence/correlations/:symbol
-         */
-        async getCorrelations(symbol) {
-            try {
-                const response = await fetch(`${apiUrl}/correlations/${symbol}`);
-                
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    console.warn(`[IntelligenceRepo] Korrelations-Abfrage fehlgeschlagen (${response.status}):`, errorData.error || 'Unbekannter Fehler');
-                    return { 
-                        symbol, 
-                        correlations: { 
-                            btc: { correlation: 0, quality: 'Nicht verfügbar' }, 
-                            gold: { correlation: 0, quality: 'Nicht verfügbar' } 
-                        } 
-                    };
-                }
+    /**
+     * Holt die allgemeinen Intelligence-Daten (Sentiment, Fundamentals, History).
+     * Feuert INTELLIGENCE_DATA_LOADED bei Erfolg.
+     * @param {string} symbol - Das Aktiensymbol.
+     * @returns {Promise<void>}
+     */
+    async getForSymbol(symbol) {
+      const data = await window.StockMaster.HttpClient.get(`${API_URL}/${symbol}`);
+      dispatch(window.StockMaster.Events.INTELLIGENCE_DATA_LOADED, data);
+    },
 
-                return await response.json();
-            } catch (error) {
-                console.error(`❌ IntelligenceRepo (GET Correlations für ${symbol}):`, error);
-                return null;
-            }
-        }
-    };
+    /**
+     * Holt Markt-Korrelationen (BTC, Gold) für ein Symbol.
+     * Feuert MARKET_CORRELATIONS_LOADED bei Erfolg.
+     * @param {string} symbol - Das Aktiensymbol.
+     * @returns {Promise<void>}
+     */
+    async getCorrelations(symbol) {
+      const data = await window.StockMaster.HttpClient.get(`${API_URL}/correlations/${symbol}`);
+      dispatch(window.StockMaster.Events.MARKET_CORRELATIONS_LOADED, data);
+    }
+  };
 })();
