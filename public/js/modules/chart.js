@@ -18,23 +18,25 @@ window.StockMaster.ChartModule = (() => {
             return;
         }
 
+        const theme = window.StockMaster.AppConstants.CHART_THEME;
+
         // Chart-Konfiguration: Transparenter Hintergrund zur nahtlosen Integration in das CSS-Layout.
         chart = LightweightCharts.createChart(container, {
             layout: {
                 background: { type: 'solid', color: 'transparent' },
-                textColor: '#d1d4dc',
-                fontSize: 12,
-                fontFamily: 'JetBrains Mono, monospace',
+                textColor: theme.TEXT_COLOR,
+                fontSize: theme.FONT_SIZE,
+                fontFamily: theme.FONT_FAMILY,
             },
             grid: {
-                vertLines: { color: 'rgba(43, 43, 67, 0.3)' },
-                horzLines: { color: 'rgba(43, 43, 67, 0.3)' },
+                vertLines: { color: theme.GRID_COLOR },
+                horzLines: { color: theme.GRID_COLOR },
             },
             rightPriceScale: {
-                borderColor: 'rgba(197, 203, 206, 0.2)',
+                borderColor: theme.BORDER_COLOR,
             },
             timeScale: {
-                borderColor: 'rgba(197, 203, 206, 0.2)',
+                borderColor: theme.BORDER_COLOR,
                 timeVisible: true,
                 secondsVisible: false,
             },
@@ -45,11 +47,11 @@ window.StockMaster.ChartModule = (() => {
 
         // Kerzen-Serie: Definierte Farben für Bullish/Bearish Trends passend zur Farbpalette.
         candleSeries = chart.addCandlestickSeries({
-            upColor: '#00e676',
-            downColor: '#ff5252',
+            upColor: theme.COLOR_UP,
+            downColor: theme.COLOR_DOWN,
             borderVisible: false,
-            wickUpColor: '#00e676',
-            wickDownColor: '#ff5252',
+            wickUpColor: theme.COLOR_UP,
+            wickDownColor: theme.COLOR_DOWN,
         });
 
         // Event-Listener für neue Daten registrieren (Orchestriert durch IntelligenceModule).

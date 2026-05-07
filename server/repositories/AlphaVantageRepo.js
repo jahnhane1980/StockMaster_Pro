@@ -4,6 +4,7 @@ const requestManager = require('../services/RequestManager');
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
 const { ProviderLimitError, ResourceNotFoundError } = require('../utils/Errors');
+const { PRIORITY, PROVIDER } = require('../utils/AppConstants');
 
 /**
  * Repository für den Zugriff auf die AlphaVantage API.
@@ -15,7 +16,7 @@ class AlphaVantageRepo {
   constructor() {
     this.apiKey = process.env.ALPHAVANTAGE_API_KEY;
     this.baseUrl = process.env.ALPHAVANTAGE_BASE_URL || 'https://www.alphavantage.co/query';
-    this.providerName = 'AV';
+    this.providerName = PROVIDER.ALPHA_VANTAGE;
   }
 
   /**
@@ -67,8 +68,8 @@ class AlphaVantageRepo {
       outputsize: 'full' // 'full' holt bis zu 20 Jahre, 'compact' nur 100 Tage.
     });
 
-    Logger.info(`[AlphaVantageRepo] Queueing History for ${ticker} (P2)`);
-    return requestManager.enqueue('P2', this.providerName, task);
+    Logger.info(`[AlphaVantageRepo] Queueing History for ${ticker} (${PRIORITY.IMPORTANT})`);
+    return requestManager.enqueue(PRIORITY.IMPORTANT, this.providerName, task);
   }
 
   /**
@@ -83,8 +84,8 @@ class AlphaVantageRepo {
       limit: 50 // Holt die letzten 50 relevanten News
     });
 
-    Logger.info(`[AlphaVantageRepo] Queueing Sentiment for ${ticker} (P3)`);
-    return requestManager.enqueue('P3', this.providerName, task);
+    Logger.info(`[AlphaVantageRepo] Queueing Sentiment for ${ticker} (${PRIORITY.BACKGROUND})`);
+    return requestManager.enqueue(PRIORITY.BACKGROUND, this.providerName, task);
   }
 
   /**
@@ -107,8 +108,8 @@ class AlphaVantageRepo {
       symbol: ticker
     });
 
-    Logger.info(`[AlphaVantageRepo] Queueing Company Overview for ${ticker} (P3)`);
-    return requestManager.enqueue('P3', this.providerName, task);
+    Logger.info(`[AlphaVantageRepo] Queueing Company Overview for ${ticker} (${PRIORITY.BACKGROUND})`);
+    return requestManager.enqueue(PRIORITY.BACKGROUND, this.providerName, task);
   }
 
   /**
@@ -124,8 +125,8 @@ class AlphaVantageRepo {
       interval: interval
     });
 
-    Logger.info(`[AlphaVantageRepo] Queueing OBV for ${ticker} (P3)`);
-    return requestManager.enqueue('P3', this.providerName, task);
+    Logger.info(`[AlphaVantageRepo] Queueing OBV for ${ticker} (${PRIORITY.BACKGROUND})`);
+    return requestManager.enqueue(PRIORITY.BACKGROUND, this.providerName, task);
   }
 }
 

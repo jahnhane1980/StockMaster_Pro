@@ -1,5 +1,20 @@
 // server/services/RequestManager.js
 const Logger = require('../utils/Logger');
+const HttpStatus = require('../utils/HttpStatus');
+const { PRIORITY, PROVIDER } = require('../utils/AppConstants');
+
+/**
+ * Konfiguration für den RequestManager.
+ * Intent: Zentralisierung von Magic Numbers zur besseren Wartbarkeit (Regel 6).
+ */
+const CONFIG = Object.freeze({
+  MAX_QUEUE_SIZE: 100,
+  MAX_RETRIES: 3,
+  DAILY_API_LIMIT: 25,
+  MINUTE_API_LIMIT: 5,
+  RESET_INTERVAL: 60000,
+  LIMIT_WAIT_TIME: 1000
+});
 
 /**
  * Zentraler Manager für alle ausgehenden API-Anfragen an externe Provider.
@@ -13,24 +28,22 @@ class RequestManager {
   constructor() {
     /** @type {Object<string, Array<Object>>} Warteschlangen nach Priorität */
     this.queues = {
-      P1: [], // Kritisch (Real-Time, Massive)
-      P2: [], // Wichtig (History, AV)
-      P3: []  // Hintergrund (Sentiment, Fundamentals, AV)
+      [PRIORITY.CRITICAL]: [],   // Kritisch (Real-Time, Massive)
+      [PRIORITY.IMPORTANT]: [],  // Wichtig (History, AV)
+      [PRIORITY.BACKGROUND]: []  // Hintergrund (Sentiment, Fundamentals, AV)
     };
 
     // Limits & Tracking
-    this.MAX_QUEUE_SIZE = 100;
-    this.MAX_RETRIES = 3;
-    this.avDailyLimit = 25;
+    this.avDailyLimit = CONFIG.DAILY_API_LIMIT;
     this.avRequestsToday = 0; 
-    this.avRequestsPerMinute = 5;
+    this.avRequestsPerMinute = CONFIG.MINUTE_API_LIMIT;
     this.avRequestsThisMinute = 0;
     
     // Status
     this.isProcessing = false;
     
     // Reset Timer für das Minutenlimit (60 Sek)
-    setInterval(() => { this.avRequestsThisMinute = 0; }, 60000); 
+    setInterval(() => { this.avRequestsThisMinute = 0; }, CONFIG.RESET_INTERVAL); 
   }
 
   /**
@@ -44,8 +57,8 @@ class RequestManager {
   enqueue(priority, provider, taskFn) {
     return new Promise((resolve, reject) => {
       // Memory-Schutz: Queue-Größe prüfen
-      if (this.queues[priority].length >= this.MAX_QUEUE_SIZE) {
-        Logger.error(`[RequestManager] Queue ${priority} voll (${this.MAX_QUEUE_SIZE}). Task verworfen.`);
+      if (this.queues[priority].length >= CONFIG.MAX_QUEUE_SIZE) {
+        Logger.error(`[RequestManager] Queue ${priority} voll (${CONFIG.MAX_QUEUE_SIZE}). Task verworfen.`);
         return reject(new Error(`Queue ${priority} ist voll. Bitte später versuchen.`));
       }
 
@@ -76,13 +89,13 @@ class RequestManager {
     let queueUsed = null;
 
     // Prioritäten: P1 > P2 > P3
-    for (const p of ['P1', 'P2', 'P3']) {
+    for (const p of [PRIORITY.CRITICAL, PRIORITY.IMPORTANT, PRIORITY.BACKGROUND]) {
       if (this.queues[p].length > 0) {
         // Sonderlogik für AV: Prüfen, ob wir überhaupt einen AV-Slot frei haben
         const isAVSlotAvailable = (this.avRequestsToday < this.avDailyLimit) && (this.avRequestsThisMinute < this.avRequestsPerMinute);
         
         // Finde den ersten Task in der Queue, der kein AV ist ODER falls AV-Slot frei ist
-        const taskIndex = this.queues[p].findIndex(t => t.provider !== 'AV' || isAVSlotAvailable);
+        const taskIndex = this.queues[p].findIndex(t => t.provider !== PROVIDER.ALPHA_VANTAGE || isAVSlotAvailable);
         
         if (taskIndex !== -1) {
           nextTask = this.queues[p].splice(taskIndex, 1)[0];
@@ -94,9 +107,11 @@ class RequestManager {
 
     if (!nextTask) {
       // Falls wir nur noch AV Tasks haben, aber im Limit sind, warten wir kurz (1 Sek)
-      const hasAVTasks = this.queues.P1.length > 0 || this.queues.P2.length > 0 || this.queues.P3.length > 0;
+      const hasAVTasks = this.queues[PRIORITY.CRITICAL].length > 0 || 
+                         this.queues[PRIORITY.IMPORTANT].length > 0 || 
+                         this.queues[PRIORITY.BACKGROUND].length > 0;
       if (hasAVTasks) {
-        setTimeout(() => this.processQueue(), 1000);
+        setTimeout(() => this.processQueue(), CONFIG.LIMIT_WAIT_TIME);
       }
       return;
     }
@@ -105,7 +120,7 @@ class RequestManager {
 
     try {
       // Tracking für AV
-      if (nextTask.provider === 'AV') {
+      if (nextTask.provider === PROVIDER.ALPHA_VANTAGE) {
         this.avRequestsToday++;
         this.avRequestsThisMinute++;
       }
@@ -116,16 +131,16 @@ class RequestManager {
 
     } catch (error) {
       // Retry-Logik (Regel 12)
-      if (nextTask.retries < this.MAX_RETRIES && error.message !== 'AV_DAILY_LIMIT_REACHED') {
+      if (nextTask.retries < CONFIG.MAX_RETRIES && error.message !== 'AV_DAILY_LIMIT_REACHED') {
         nextTask.retries++;
-        Logger.warn(`[RequestManager] Task fehlgeschlagen (${nextTask.provider}). Retry ${nextTask.retries}/${this.MAX_RETRIES}. Fehler: ${error.message}`);
+        Logger.warn(`[RequestManager] Task fehlgeschlagen (${nextTask.provider}). Retry ${nextTask.retries}/${CONFIG.MAX_RETRIES}. Fehler: ${error.message}`);
         
         // Zurück in die Queue (ans Ende der jeweiligen Priorität)
         this.queues[nextTask.priority].push(nextTask);
       } else {
         // Finales Scheitern
         if (error.message === 'AV_DAILY_LIMIT_REACHED') {
-          nextTask.reject({ status: 429, message: 'Provider Limit Reached for today.' });
+          nextTask.reject({ status: HttpStatus.TOO_MANY_REQUESTS, message: 'Provider Limit Reached for today.' });
         } else {
           Logger.error(`[RequestManager] Task endgültig fehlgeschlagen nach ${nextTask.retries} Retries: ${error.message}`);
           nextTask.reject(error);
@@ -149,6 +164,4 @@ class RequestManager {
   }
 }
 
-// Singleton-Export, damit alle Server-Module dieselbe Queue nutzen
-const rimInstance = new RequestManager();
-module.exports = rimInstance;
+module.exports = new RequestManager();

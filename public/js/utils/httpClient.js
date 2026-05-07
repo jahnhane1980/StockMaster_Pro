@@ -49,9 +49,9 @@ window.StockMaster.HttpClient = (function() {
       return await response.json();
 
     } catch (error) {
-      if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-        document.dispatchEvent(new CustomEvent(window.StockMaster.Events.ERROR_OCCURRED, {
-          detail: { message: 'Netzwerkfehler. Bitte Internetverbindung prüfen.' }
+      const errorNames = window.StockMaster.AppConstants.ERROR_NAMES;
+      if (error.name === errorNames.TYPE_ERROR && error.message === 'Failed to fetch') {
+        document.dispatchEvent(new CustomEvent(window.StockMaster.Events.ERROR_OCCURRED, {          detail: { message: 'Netzwerkfehler. Bitte Internetverbindung prüfen.' }
         }));
       }
       throw error;
@@ -70,7 +70,7 @@ window.StockMaster.HttpClient = (function() {
     let errorMessage = 'Ein unbekannter API-Fehler ist aufgetreten.';
     let isLimitError = false;
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === HttpStatus.UNAUTHORIZED || response.status === HttpStatus.FORBIDDEN) {
       errorMessage = 'Zugriff verweigert. Bitte überprüfe deinen API-Key.';
     } else if (response.status === HttpStatus.NOT_FOUND) {
       errorMessage = 'Die angeforderte Ressource wurde nicht gefunden.';

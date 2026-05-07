@@ -53,9 +53,9 @@ class BackendService {
             const response = await fetch(`${this.baseUrl}/intelligence/${ticker}`);
             
             // ==========================================
-            // WICHTIG: Das Provider-Limit (429) abfangen!
+            // WICHTIG: Das Provider-Limit (TOO_MANY_REQUESTS) abfangen!
             // ==========================================
-            if (response.status === 429) {
+            if (response.status === window.StockMaster.HttpStatus.TOO_MANY_REQUESTS) {
                 const errData = await response.json().catch(() => ({}));
                 
                 // Wir werfen einen speziellen Error, den du in Intelligence.js fangen 

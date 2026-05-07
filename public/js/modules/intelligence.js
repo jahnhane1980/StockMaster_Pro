@@ -99,6 +99,8 @@ window.StockMaster.IntelligenceModule = (() => {
   const updateUI = () => {
     if (!currentData) return;
 
+    const config = window.StockMaster.AppConstants.UI_DISPLAY_CONFIG;
+
     // Panels umschalten: Daten vorhanden -> Board zeigen, Empty State verstecken.
     if (emptyStatePanel) emptyStatePanel.classList.add('u-hidden');
     if (boardPanel) boardPanel.classList.remove('u-hidden');
@@ -107,20 +109,20 @@ window.StockMaster.IntelligenceModule = (() => {
     
     // Preis-Formatierung für konsistente Anzeige (immer 2 Nachkommastellen).
     if (boardPrice) {
-      boardPrice.textContent = currentData.currentPrice ? `$${currentData.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
+      boardPrice.textContent = currentData.currentPrice ? `$${currentData.currentPrice.toLocaleString(undefined, { minimumFractionDigits: config.PRICE_DECIMALS, maximumFractionDigits: config.PRICE_DECIMALS })}` : 'N/A';
     }
     
     // Farb-Codierung der Kursänderung (Positiv=Grün, Negativ=Rot).
     if (boardChange) {
       const changeVal = currentData.change || 0;
-      boardChange.textContent = `${changeVal > 0 ? '+' : ''}${changeVal.toFixed(2)}%`;
+      boardChange.textContent = `${changeVal > 0 ? '+' : ''}${changeVal.toFixed(config.PERCENT_DECIMALS)}%`;
       boardChange.className = changeVal >= 0 ? 'u-text--positive' : 'u-text--negative'; 
     }
 
     if (currentData.fundamentals) {
       if (valMcap) valMcap.textContent = currentData.fundamentals.market_cap ? formatLargeNumber(currentData.fundamentals.market_cap) : 'N/A';
-      if (valDebt) valDebt.textContent = currentData.fundamentals.debt_equity ? currentData.fundamentals.debt_equity.toFixed(2) : 'N/A';
-      if (valRev) valRev.textContent = currentData.fundamentals.revenue_growth ? `${(currentData.fundamentals.revenue_growth * 100).toFixed(2)}%` : 'N/A';
+      if (valDebt) valDebt.textContent = currentData.fundamentals.debt_equity ? currentData.fundamentals.debt_equity.toFixed(config.RATIO_DECIMALS) : 'N/A';
+      if (valRev) valRev.textContent = currentData.fundamentals.revenue_growth ? `${(currentData.fundamentals.revenue_growth * 100).toFixed(config.PERCENT_DECIMALS)}%` : 'N/A';
     }
 
     // Sentiment-Analyse: Score auf einer Skala visualisieren.
@@ -129,9 +131,9 @@ window.StockMaster.IntelligenceModule = (() => {
       if (sentimentText) {
         let status = 'Neutral';
         // Schwellenwerte für Sentiment-Status.
-        if (latestScore > 0.15) status = 'Bullish';
-        else if (latestScore < -0.15) status = 'Bearish';
-        sentimentText.textContent = `${status} (${latestScore.toFixed(2)})`;
+        if (latestScore > config.SENTIMENT_THRESHOLD_UP) status = 'Bullish';
+        else if (latestScore < config.SENTIMENT_THRESHOLD_DOWN) status = 'Bearish';
+        sentimentText.textContent = `${status} (${latestScore.toFixed(config.SENTIMENT_DECIMALS)})`;
       }
       if (sentimentIndicator) {
         // Umwandlung des Scores (-1 bis +1) in Prozent (0 bis 100) für CSS-Positionierung.
@@ -154,15 +156,16 @@ window.StockMaster.IntelligenceModule = (() => {
   const renderCorrelations = () => {
     if (!correlationsList || !currentData) return;
     let html = '';
+    const config = window.StockMaster.AppConstants.UI_DISPLAY_CONFIG;
 
     // Benchmarks (BTC/Gold) werden hervorgehoben dargestellt.
     if (currentData.marketCorrelations) {
       const mc = currentData.marketCorrelations;
       if (mc.btc) {
-        html += `<div class="correlation correlation--benchmark"><span class="correlation__label">BTC:</span><span class="correlation__value">${mc.btc.correlation.toFixed(2)}</span></div>`;
+        html += `<div class="correlation correlation--benchmark"><span class="correlation__label">BTC:</span><span class="correlation__value">${mc.btc.correlation.toFixed(config.RATIO_DECIMALS)}</span></div>`;
       }
       if (mc.gold) {
-        html += `<div class="correlation correlation--benchmark"><span class="correlation__label">Gold:</span><span class="correlation__value">${mc.gold.correlation.toFixed(2)}</span></div>`;
+        html += `<div class="correlation correlation--benchmark"><span class="correlation__label">Gold:</span><span class="correlation__value">${mc.gold.correlation.toFixed(config.RATIO_DECIMALS)}</span></div>`;
       }
     }
 
@@ -171,7 +174,7 @@ window.StockMaster.IntelligenceModule = (() => {
       html += currentData.correlations.map(corr => `
         <div class="correlation">
           <span class="correlation__label">${corr.symbol}</span>
-          <span class="correlation__value ${corr.change >= 0 ? 'u-text--positive' : 'u-text--negative'}">${corr.change.toFixed(2)}%</span>
+          <span class="correlation__value ${corr.change >= 0 ? 'u-text--positive' : 'u-text--negative'}">${corr.change.toFixed(config.PERCENT_DECIMALS)}%</span>
         </div>
       `).join('');
     }
@@ -187,9 +190,11 @@ window.StockMaster.IntelligenceModule = (() => {
    */
   const formatLargeNumber = (num) => {
     const n = parseFloat(num);
-    if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T'; // Trillion (Deutsch: Billion)
-    if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';  // Billion (Deutsch: Milliarde)
-    if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';  // Million
+    const config = window.StockMaster.AppConstants.UI_DISPLAY_CONFIG;
+
+    if (n >= config.LARGE_NUM_TRILLION) return (n / config.LARGE_NUM_TRILLION).toFixed(2) + 'T'; // Trillion (Deutsch: Billion)
+    if (n >= config.LARGE_NUM_BILLION) return (n / config.LARGE_NUM_BILLION).toFixed(2) + 'B';  // Billion (Deutsch: Milliarde)
+    if (n >= config.LARGE_NUM_MILLION) return (n / config.LARGE_NUM_MILLION).toFixed(2) + 'M';  // Million
     return n.toLocaleString();
   };
 

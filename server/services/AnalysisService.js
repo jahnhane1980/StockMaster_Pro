@@ -2,6 +2,18 @@
 const Logger = require('../utils/Logger');
 
 /**
+ * Konfiguration für die Analyse-Logik.
+ * Intent: Zentralisierung statistischer Schwellenwerte (Regel 6).
+ */
+const ANALYSIS_CONFIG = Object.freeze({
+  MIN_SAMPLE_SIZE: 5,
+  CORRELATION_EXCELLENT: 0.9,
+  CORRELATION_STRONG: 0.7,
+  CORRELATION_MODERATE: 0.4,
+  CORRELATION_WEAK: 0.1
+});
+
+/**
  * Service für die statistische Analyse von Marktdaten.
  * Intent: Dieser Service bietet mathematische Hilfsfunktionen zur Identifikation von 
  * Zusammenhängen zwischen Assets. Wir nutzen die Pearson-Korrelation, um Signale zu 
@@ -39,8 +51,8 @@ class AnalysisService {
     }
 
     const n = alignedX.length;
-    if (n < 5) { // Zu wenig Überlappung für eine sinnvolle Aussage
-      Logger.warn(`[AnalysisService] Korrelation unpräzise: Zu wenig Überlappung (n=${n}). Erwarte min. 5.`);
+    if (n < ANALYSIS_CONFIG.MIN_SAMPLE_SIZE) { // Zu wenig Überlappung für eine sinnvolle Aussage
+      Logger.warn(`[AnalysisService] Korrelation unpräzise: Zu wenig Überlappung (n=${n}). Erwarte min. ${ANALYSIS_CONFIG.MIN_SAMPLE_SIZE}.`);
       return { correlation: 0, quality: 'Zu wenig Überlappung', sampleSize: n };
     }
 
@@ -87,10 +99,10 @@ class AnalysisService {
     const absR = Math.abs(r);
     let desc = '';
 
-    if (absR >= 0.9) desc = 'Sehr starke';
-    else if (absR >= 0.7) desc = 'Starke';
-    else if (absR >= 0.4) desc = 'Moderate';
-    else if (absR >= 0.1) desc = 'Schwache';
+    if (absR >= ANALYSIS_CONFIG.CORRELATION_EXCELLENT) desc = 'Sehr starke';
+    else if (absR >= ANALYSIS_CONFIG.CORRELATION_STRONG) desc = 'Starke';
+    else if (absR >= ANALYSIS_CONFIG.CORRELATION_MODERATE) desc = 'Moderate';
+    else if (absR >= ANALYSIS_CONFIG.CORRELATION_WEAK) desc = 'Schwache';
     else return 'Nahezu keine Korrelation';
 
     const direction = r > 0 ? 'positive Korrelation' : 'negative Korrelation (Divergenz)';

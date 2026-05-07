@@ -2,6 +2,8 @@
 const axios = require('axios');
 const requestManager = require('../services/RequestManager');
 const Logger = require('../utils/Logger');
+const HttpStatus = require('../utils/HttpStatus');
+const { PRIORITY, PROVIDER } = require('../utils/AppConstants');
 
 /**
  * Repository für den Zugriff auf die Massive API (Hochverfügbare Marktdaten).
@@ -14,7 +16,7 @@ class MassiveRepo {
     const apiVersion = process.env.MASSIVE_API_VERSION || 'v1';
     // Priorisiere MASSIVE_BASE_URL aus der .env, sonst Fallback auf Versionierung
     this.baseUrl = process.env.MASSIVE_BASE_URL || `https://api.massive.com/${apiVersion}`;
-    this.providerName = 'MASSIVE';
+    this.providerName = PROVIDER.MASSIVE;
   }
 
   /**
@@ -36,7 +38,7 @@ class MassiveRepo {
 
       return response.data;
     } catch (error) {
-      if (error.response && error.response.status === 429) {
+      if (error.response && error.response.status === HttpStatus.TOO_MANY_REQUESTS) {
         throw new Error('MASSIVE_LIMIT_REACHED');
       }
       throw error;
@@ -51,8 +53,8 @@ class MassiveRepo {
   async getRealtimeQuote(ticker) {
     const task = () => this._fetchFromAPI(`/stocks/${ticker}/quote`);
 
-    Logger.info(`[MassiveRepo] Queueing Realtime Quote for ${ticker} (P1)`);
-    return requestManager.enqueue('P1', this.providerName, task);
+    Logger.info(`[MassiveRepo] Queueing Realtime Quote for ${ticker} (${PRIORITY.CRITICAL})`);
+    return requestManager.enqueue(PRIORITY.CRITICAL, this.providerName, task);
   }
 
   /**
@@ -65,8 +67,8 @@ class MassiveRepo {
       interval: '5m' // 5-Minuten Kerzen für den heutigen Tag
     });
 
-    Logger.info(`[MassiveRepo] Queueing Intraday Data for ${ticker} (P1)`);
-    return requestManager.enqueue('P1', this.providerName, task);
+    Logger.info(`[MassiveRepo] Queueing Intraday Data for ${ticker} (${PRIORITY.CRITICAL})`);
+    return requestManager.enqueue(PRIORITY.CRITICAL, this.providerName, task);
   }
 
   /**
@@ -84,8 +86,8 @@ class MassiveRepo {
       interval: '1d'
     });
 
-    Logger.info(`[MassiveRepo] Queueing History Diff for ${ticker} (${fromDate} to ${toDate}) (P1)`);
-    return requestManager.enqueue('P1', this.providerName, task);
+    Logger.info(`[MassiveRepo] Queueing History Diff for ${ticker} (${fromDate} to ${toDate}) (${PRIORITY.CRITICAL})`);
+    return requestManager.enqueue(PRIORITY.CRITICAL, this.providerName, task);
   }
 }
 
