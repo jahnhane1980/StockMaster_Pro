@@ -4,7 +4,7 @@ const requestManager = require('../services/RequestManager');
 
 class AlphaVantageRepo {
   constructor() {
-    this.apiKey = process.env.ALPHA_VANTAGE_API_KEY;
+    this.apiKey = process.env.ALPHAVANTAGE_API_KEY;
     this.baseUrl = 'https://www.alphavantage.co/query';
     this.providerName = 'AV';
   }
@@ -63,12 +63,19 @@ class AlphaVantageRepo {
    * Holt Fundamentaldaten: Company Overview (Hintergrund-Task -> Prio: P3)
    */
   async getFundamentalsOverview(ticker) {
+    return this.getCompanyOverview(ticker);
+  }
+
+  /**
+   * Alias für getFundamentalsOverview (Hintergrund-Task -> Prio: P3)
+   */
+  async getCompanyOverview(ticker) {
     const task = () => this._fetchFromAPI({
       function: 'OVERVIEW',
       symbol: ticker
     });
 
-    console.log(`[AlphaVantageRepo] Queueing Fundamentals for ${ticker} (P3)`);
+    console.log(`[AlphaVantageRepo] Queueing Company Overview for ${ticker} (P3)`);
     return requestManager.enqueue('P3', this.providerName, task);
   }
 

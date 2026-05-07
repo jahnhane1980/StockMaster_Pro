@@ -5,8 +5,8 @@ const requestManager = require('../services/RequestManager');
 class MassiveRepo {
   constructor() {
     this.apiKey = process.env.MASSIVE_API_KEY;
-    // Standard REST Base-URL laut Massive Quickstart Docs
-    this.baseUrl = 'https://api.massive.com/v1'; 
+    // Priorisiere MASSIVE_BASE_URL aus der .env, sonst Fallback auf Versionierung
+    this.baseUrl = process.env.MASSIVE_BASE_URL || `https://api.massive.com/${process.env.MASSIVE_API_VERSION || 'v3'}`; 
     this.providerName = 'MASSIVE';
   }
 
@@ -58,7 +58,7 @@ class MassiveRepo {
   }
 
   /**
-   * Holt historische Tagesdaten für einen bestimmten Zeitraum (Prio: P2)
+   * Holt historische Tagesdaten für einen bestimmten Zeitraum (Prio: P1)
    * Wird genutzt, um die Lücke zwischen dem letzten DB-Eintrag und heute zu füllen.
    */
   async getHistoricalData(ticker, fromDate, toDate) {
@@ -68,8 +68,8 @@ class MassiveRepo {
       interval: '1d'
     });
 
-    console.log(`[MassiveRepo] Queueing History Diff for ${ticker} (${fromDate} to ${toDate}) (P2)`);
-    return requestManager.enqueue('P2', this.providerName, task);
+    console.log(`[MassiveRepo] Queueing History Diff for ${ticker} (${fromDate} to ${toDate}) (P1)`);
+    return requestManager.enqueue('P1', this.providerName, task);
   }
 }
 

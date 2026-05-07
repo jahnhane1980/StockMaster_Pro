@@ -20,9 +20,10 @@ class HistoricalDataDAO {
   /**
    * Speichert ein Array von harmonisierten Datenpunkten.
    */
-  insertMany(ticker, dataPoints, provider = 'AV') {
-    if (!dataPoints || dataPoints.length === 0) {
-      return 0;
+  insertMany(ticker, data, provider = 'AV') {
+    if (!data || data.length === 0) { 
+      console.warn('DAO: insertMany aborted - data array is empty'); 
+      return 0; 
     }
 
     const stmt = db.prepare(`
@@ -49,9 +50,9 @@ class HistoricalDataDAO {
       }
     });
 
-    insertTransaction(dataPoints);
-    console.log(`[DAO] ${dataPoints.length} Einträge für ${ticker} synchron gespeichert (Provider: ${provider}).`);
-    return dataPoints.length;
+    insertTransaction(data);
+    console.log(`[DAO] ${data.length} Einträge für ${ticker} synchron gespeichert (Provider: ${provider}).`);
+    return data.length;
   }
 
   /**

@@ -42,35 +42,43 @@ class RequestManager {
 
   async processQueue() {
     if (this.isProcessing) return;
-    this.isProcessing = true;
+    
+    // Wir suchen den nächsten ausführbaren Task
+    let nextTask = null;
+    let queueUsed = null;
 
-    // Prioritäten strikt abarbeiten: P1 > P2 > P3
-    const nextTask = this.queues.P1.shift() || this.queues.P2.shift() || this.queues.P3.shift();
+    // Prioritäten: P1 > P2 > P3
+    for (const p of ['P1', 'P2', 'P3']) {
+      if (this.queues[p].length > 0) {
+        // Sonderlogik für AV: Prüfen, ob wir überhaupt einen AV-Slot frei haben
+        const isAVSlotAvailable = (this.avRequestsToday < this.avDailyLimit) && (this.avRequestsThisMinute < this.avRequestsPerMinute);
+        
+        // Finde den ersten Task in der Queue, der kein AV ist ODER falls AV-Slot frei ist
+        const taskIndex = this.queues[p].findIndex(t => t.provider !== 'AV' || isAVSlotAvailable);
+        
+        if (taskIndex !== -1) {
+          nextTask = this.queues[p].splice(taskIndex, 1)[0];
+          queueUsed = p;
+          break;
+        }
+      }
+    }
 
     if (!nextTask) {
-      this.isProcessing = false;
+      // Falls wir nur noch AV Tasks haben, aber im Limit sind, warten wir kurz
+      const hasAVTasks = this.queues.P1.length > 0 || this.queues.P2.length > 0 || this.queues.P3.length > 0;
+      if (hasAVTasks) {
+        // console.log("[RIM] Nur noch AV Tasks in der Queue, aber Limit erreicht. Warte...");
+        setTimeout(() => this.processQueue(), 1000);
+      }
       return;
     }
 
-    try {
-      // Spezielle Limit-Logik für Alpha Vantage
-      if (nextTask.provider === 'AV') {
-        if (this.avRequestsToday >= this.avDailyLimit) {
-           throw new Error('AV_DAILY_LIMIT_REACHED');
-        }
-        
-        if (this.avRequestsThisMinute >= this.avRequestsPerMinute) {
-           // Minutenlimit erreicht: Task zurück an den Anfang seiner Prio-Queue
-           this.queues[nextTask.priority].unshift(nextTask); 
-           console.log("[RIM] AV Minutenlimit erreicht, pausiere für 15 Sekunden...");
-           
-           await this._sleep(15000); 
-           this.isProcessing = false;
-           this.processQueue(); // Erneut versuchen
-           return;
-        }
+    this.isProcessing = true;
 
-        // Request zählen, da er jetzt ausgeführt wird
+    try {
+      // Tracking für AV
+      if (nextTask.provider === 'AV') {
         this.avRequestsToday++;
         this.avRequestsThisMinute++;
       }
@@ -81,15 +89,14 @@ class RequestManager {
 
     } catch (error) {
       if (error.message === 'AV_DAILY_LIMIT_REACHED') {
-         // Kontrollierter Abbruch, wenn das Tageslimit erreicht ist
          nextTask.reject({ status: 429, message: 'Provider Limit Reached for today.' });
       } else {
          nextTask.reject(error);
       }
     } finally {
       this.isProcessing = false;
-      // Kurze Pause, um die Node Event-Loop atmen zu lassen
-      setTimeout(() => this.processQueue(), 100);
+      // Sofort weitermachen, falls noch was in der Queue ist
+      setImmediate(() => this.processQueue());
     }
   }
 

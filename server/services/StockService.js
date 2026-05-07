@@ -1,10 +1,70 @@
 // server/services/StockService.js
 const alphaVantageRepo = require('../repositories/AlphaVantageRepo');
-const massiveRepo = require('../repositories/MassiveRepo');
+const MassiveRepo = require('../repositories/MassiveRepo');
+const RequestManager = require('./RequestManager');
+const analysisService = require('./AnalysisService');
 const historicalDataDAO = require('../models/HistoricalDataDAO');
 const intelligenceDAO = require('../models/IntelligenceDAO');
 
 class StockService {
+
+  /**
+   * Holt den Echtzeit-Preis über den RequestManager (Massive P1)
+   */
+  async getRealtimeQuote(symbol) {
+    return RequestManager.enqueue('P1', 'MASSIVE', () => MassiveRepo.getRealtimeQuote(symbol));
+  }
+
+  /**
+   * Synchronisiert alle Daten für einen Ticker (Realtime, Historie, News-Sentiment)
+   * Wird typischerweise im Hintergrund aufgerufen (z.B. beim Hinzufügen zur Watchlist).
+   */
+  async syncTickerData(symbol) {
+    console.log(`[StockService] Starte Full-Sync für: ${symbol}`);
+    const ticker = symbol.toUpperCase();
+
+    try {
+      // 1. Parallel alles abrufen, was wir für einen frischen Ticker brauchen
+      // Realtime (Massive P1), Historie (AV P2) und Sentiment (AV P3)
+      const [realtime, historyRaw, sentimentRaw] = await Promise.all([
+        this.getRealtimeQuote(ticker).catch(err => {
+          console.warn(`[Sync] Realtime-Fehler für ${ticker}:`, err.message);
+          return null;
+        }),
+        alphaVantageRepo.getDailyHistory(ticker).catch(err => {
+          console.warn(`[Sync] Historie-Fehler für ${ticker}:`, err.message);
+          return null;
+        }),
+        alphaVantageRepo.getNewsSentiment(ticker).catch(err => {
+          console.warn(`[Sync] Sentiment-Fehler für ${ticker}:`, err.message);
+          return null;
+        })
+      ]);
+
+      // 2. Historie persistieren (falls erfolgreich geladen)
+      if (historyRaw) {
+        const mappedHistory = this._mapAlphaVantageHistory(historyRaw);
+        await historicalDataDAO.insertMany(ticker, mappedHistory, 'AV');
+      }
+
+      // 3. News-Sentiment persistieren (falls erfolgreich geladen)
+      if (sentimentRaw && sentimentRaw.feed) {
+        const mappedSentiment = this._mapAlphaVantageSentiment(sentimentRaw, ticker);
+        await intelligenceDAO.insertSentiment(ticker, mappedSentiment);
+      }
+
+      console.log(`[StockService] Sync für ${ticker} erfolgreich abgeschlossen.`);
+      
+      // 4. Korrelationen neu berechnen (falls Basiswerte vorhanden sind)
+      await this.recalculateCorrelations(ticker);
+
+      return true;
+
+    } catch (error) {
+      console.error(`[StockService] Kritischer Fehler im Sync-Prozess für ${ticker}:`, error.message);
+      return false;
+    }
+  }
   
   /**
    * Die Hauptfunktion, die vom Controller/Frontend aufgerufen wird,
@@ -14,8 +74,13 @@ class StockService {
     try {
       console.log(`[StockService] Lade Intelligence-Daten für: ${ticker}`);
 
-      // 1. ECHTZEIT-DATEN HOLEN (Massive - Prio 1)
-      const realtimeData = await massiveRepo.getRealtimeQuote(ticker);
+      // 1. ECHTZEIT-DATEN HOLEN (Massive - Prio 1) - Wrapped in try-catch
+      let realtimeData = { price: 0, change: 0 };
+      try {
+        realtimeData = await this.getRealtimeQuote(ticker);
+      } catch (err) {
+        console.error(`[StockService] Fehler beim Laden der Echtzeit-Daten für ${ticker}:`, err.message);
+      }
 
       // 2. HISTORISCHE DATEN (Hybrid-Logik: AV vs. Massive)
       const lastRecordDate = await historicalDataDAO.getLastRecordDate(ticker);
@@ -31,15 +96,13 @@ class StockService {
       } else if (lastRecordDate < todayStr) {
         // Fall B: Daten vorhanden, aber Lücke -> Update über Massive
         console.log(`[StockService] Historie für ${ticker} veraltet (Stand: ${lastRecordDate}). Hole Diffs von Massive...`);
-        // Beachte: Massive Repo muss den Zeitraum von lastRecordDate bis heute abfragen
-        const historyRaw = await massiveRepo.getHistoricalData(ticker, lastRecordDate, todayStr);
+        const historyRaw = await MassiveRepo.getHistoricalData(ticker, lastRecordDate, todayStr);
         const mappedHistory = this._mapMassiveHistory(historyRaw);
         await historicalDataDAO.insertMany(ticker, mappedHistory, 'MASSIVE');
       }
 
       // Lade die nun vollständige Historie aus unserer SQLite-Datenbank für das Chart
       const finalHistory = await historicalDataDAO.getHistoryForChart(ticker);
-
 
       // 3. FUNDAMENTALDATEN HOLEN & UPDATEN
       let metadata = await intelligenceDAO.getMetadata(ticker);
@@ -57,14 +120,23 @@ class StockService {
       // 4. SENTIMENT (Die im Hintergrund geladenen Scores aus der DB holen)
       const sentimentHistory = await intelligenceDAO.getLatestSentiment(ticker, 5);
 
-      // 5. KORRELATIONEN (Basiswerte wie BTC, Gold etc.)
+      // 5. TECHNISCHE INDIKATOREN (OBV)
+      let obvData = null;
+      try {
+        const obvRaw = await alphaVantageRepo.getOBV(ticker);
+        obvData = this._mapAlphaVantageOBV(obvRaw);
+      } catch (err) {
+        console.warn(`[StockService] OBV konnte für ${ticker} nicht geladen werden:`, err.message);
+      }
+
+      // 6. KORRELATIONEN (Basiswerte wie BTC, Gold etc.)
       const correlations = await intelligenceDAO.getCorrelations(ticker);
       const linkedData = [];
 
       if (correlations && correlations.length > 0) {
           for (const corr of correlations) {
               try {
-                  const linkedQuote = await massiveRepo.getRealtimeQuote(corr.linked_ticker);
+                  const linkedQuote = await this.getRealtimeQuote(corr.linked_ticker);
                   linkedData.push({
                       symbol: corr.linked_ticker,
                       price: linkedQuote.price,
@@ -86,12 +158,49 @@ class StockService {
         fundamentals: metadata,
         sentiment: sentimentHistory,
         history: finalHistory,
-        correlations: linkedData
+        correlations: linkedData,
+        indicators: {
+          obv: obvData
+        }
       };
 
     } catch (error) {
       console.error(`[StockService] Fehler beim Laden der Daten für ${ticker}:`, error.message);
       throw error; 
+    }
+  }
+
+  /**
+   * Berechnet die Korrelations-Scores für einen Ticker neu,
+   * basierend auf den in der DB vorhandenen historischen Daten.
+   */
+  async recalculateCorrelations(ticker) {
+    try {
+      const correlations = await intelligenceDAO.getCorrelations(ticker);
+      if (!correlations || correlations.length === 0) return;
+
+      const mainHistory = await historicalDataDAO.getHistoryForChart(ticker);
+      if (mainHistory.length < 10) return;
+
+      console.log(`[StockService] Berechne Korrelationen für ${ticker} neu...`);
+
+      for (const corr of correlations) {
+        const linkedHistory = await historicalDataDAO.getHistoryForChart(corr.linked_ticker);
+        
+        if (linkedHistory.length >= 10) {
+          const result = analysisService.calculateCorrelation(mainHistory, linkedHistory);
+          
+          await intelligenceDAO.upsertCorrelation(
+            ticker, 
+            corr.linked_ticker, 
+            result.correlation
+          );
+          
+          console.log(`[StockService] Korrelation ${ticker} <-> ${corr.linked_ticker}: ${result.correlation} (${result.quality})`);
+        }
+      }
+    } catch (err) {
+      console.error(`[StockService] Fehler bei der Korrelations-Berechnung für ${ticker}:`, err.message);
     }
   }
 
@@ -130,9 +239,13 @@ class StockService {
    */
   _mapMassiveHistory(rawData) {
     // Massive API Mapping: Wir erwarten hier das Format von Massive
-    if (!rawData || !rawData.data) return [];
+    const data = Array.isArray(rawData) ? rawData : (rawData.data || []);
+    
+    if (data.length === 0) {
+        console.warn("StockService: MassiveRepo lieferte leeres Array für Ticker");
+    }
 
-    return rawData.data.map(item => ({
+    return data.map(item => ({
       date: item.date, 
       open: item.open,
       high: item.high,
@@ -141,6 +254,50 @@ class StockService {
       volume: item.volume,
       vwap: item.vwap || null
     }));
+  }
+
+  /**
+   * Harmonisiert das Alpha Vantage Sentiment
+   */
+  _mapAlphaVantageSentiment(rawData, ticker) {
+    if (!rawData || !rawData.feed) return [];
+    
+    return rawData.feed.map(item => {
+      // Suche den Ticker im Ticker-Sentiment-Array
+      const tickerData = item.ticker_sentiment.find(t => t.ticker === ticker);
+      return {
+        timestamp: this._formatAVTimestamp(item.time_published),
+        sentiment_score: parseFloat(item.overall_sentiment_score),
+        relevance_score: tickerData ? parseFloat(tickerData.relevance_score) : 0
+      };
+    });
+  }
+
+  /**
+   * Hilfsfunktion zum Formatieren von AV Zeitstempeln (YYYYMMDDTHHMMSS -> ISO)
+   */
+  _formatAVTimestamp(ts) {
+    if (!ts) return new Date().toISOString();
+    const year = ts.substring(0, 4);
+    const month = ts.substring(4, 6);
+    const day = ts.substring(6, 8);
+    const hour = ts.substring(9, 11);
+    const min = ts.substring(11, 13);
+    const sec = ts.substring(13, 15);
+    return `${year}-${month}-${day}T${hour}:${min}:${sec}Z`;
+  }
+
+  /**
+   * Harmonisiert die Alpha Vantage OBV Daten
+   */
+  _mapAlphaVantageOBV(rawData) {
+    if (!rawData || !rawData['Technical Analysis: OBV']) return null;
+    const timeSeries = rawData['Technical Analysis: OBV'];
+    const latestDate = Object.keys(timeSeries)[0];
+    return {
+      value: parseFloat(timeSeries[latestDate].OBV),
+      date: latestDate
+    };
   }
 
   /**

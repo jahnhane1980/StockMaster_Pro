@@ -67,6 +67,38 @@ class BackendService {
             throw error;
         }
     }
+
+    /**
+     * Holt gezielt Fundamentaldaten für einen Ticker.
+     */
+    async getFundamentals(ticker) {
+        try {
+            const response = await fetch(`${this.baseUrl}/fundamentals/${ticker}`);
+            if (!response.ok) throw new Error('Fehler beim Laden der Fundamentals');
+            return await response.json();
+        } catch (error) {
+            console.error('[BackendService] getFundamentals Error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Erstellt eine Korrelation zwischen zwei Assets.
+     */
+    async addCorrelation(mainTicker, linkedTicker, score = 0) {
+        try {
+            const response = await fetch(`${this.baseUrl}/correlations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mainTicker, linkedTicker, score })
+            });
+            if (!response.ok) throw new Error('Fehler beim Erstellen der Korrelation');
+            return await response.json();
+        } catch (error) {
+            console.error('[BackendService] addCorrelation Error:', error);
+            throw error;
+        }
+    }
 }
 
 // Global als Instanz verfügbar machen, damit deine Module darauf zugreifen können

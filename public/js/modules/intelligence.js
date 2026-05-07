@@ -13,6 +13,8 @@ window.StockMaster.IntelligenceModule = (() => {
     const valRev = document.getElementById('val-rev');
     const sentimentIndicator = document.getElementById('sentiment-indicator');
     const sentimentText = document.getElementById('sentiment-text');
+    const correlationsList = document.getElementById('correlations-list');
+    const valObv = document.getElementById('val-obv');
 
     const init = () => {
         if (window.StockMaster.Events) {
@@ -104,6 +106,31 @@ window.StockMaster.IntelligenceModule = (() => {
         } else {
             if (sentimentText) sentimentText.textContent = "Keine News-Daten verfügbar.";
             if (sentimentIndicator) sentimentIndicator.style.left = "50%";
+        }
+
+        if (correlationsList) {
+            if (data.correlations && data.correlations.length > 0) {
+                correlationsList.innerHTML = data.correlations.map(corr => {
+                    const score = corr.correlation_score || 0;
+                    return `
+                        <div class="correlation-item">
+                            <span title="Score: ${score}">${corr.symbol} (${score.toFixed(2)})</span>
+                            <span>$${corr.price.toFixed(2)}</span>
+                            <span class="${corr.change >= 0 ? 'positive' : 'negative'}">${corr.change > 0 ? '+' : ''}${corr.change.toFixed(2)}%</span>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                correlationsList.textContent = 'Keine Korrelationen verknüpft.';
+            }
+        }
+
+        if (valObv) {
+            if (data.indicators && data.indicators.obv) {
+                valObv.textContent = data.indicators.obv.value.toLocaleString();
+            } else {
+                valObv.textContent = 'N/A';
+            }
         }
     };
 

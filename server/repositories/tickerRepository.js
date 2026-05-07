@@ -1,4 +1,6 @@
 const { db } = require('../database');
+const RequestManager = require('../services/RequestManager');
+const MassiveRepo = require('./MassiveRepo');
 
 const TickerRepository = {
     getAllTickers: () => {
@@ -8,6 +10,13 @@ const TickerRepository = {
             ...row,
             linked_assets: row.linked_assets ? JSON.parse(row.linked_assets) : []
         }));
+    },
+
+    /**
+     * Holt den Echtzeit-Preis über den RequestManager (Massive P1)
+     */
+    async getRealtimePrice(symbol) {
+        return RequestManager.enqueue('P1', 'MASSIVE', () => MassiveRepo.getRealtimeQuote(symbol));
     },
 
     upsertTicker: (ticker) => {

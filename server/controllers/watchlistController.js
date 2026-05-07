@@ -2,7 +2,7 @@
 const { db } = require('../database');
 const TickerRepository = require('../repositories/tickerRepository');
 const stockService = require('../services/StockService');
-const alphaVantageRepo = require('../repositories/AlphaVantageRepo');
+const intelligenceDAO = require('../models/IntelligenceDAO');
 
 class WatchlistController {
   
@@ -26,17 +26,14 @@ class WatchlistController {
         name: name || '' 
       });
 
-      console.log(`[WatchlistController] Ticker ${ticker} hinzugefügt. Starte Hintergrund-Sync...`);
+      // Log für den Sync-Start
+      console.log(`Background-Sync gestartet für Symbol: ${ticker}`);
       
-      // 2. Hintergrund-Jobs (ohne await, um UI nicht zu blockieren)
-      // Wir rufen hier Methoden auf, die den RequestManager nutzen
-      
-      // Historie & Fundamentals im Hintergrund anstoßen
-      // Hinweis: StockService.getIntelligenceData macht das eigentlich auch beim ersten Aufruf,
-      // aber hier triggern wir es proaktiv.
-      alphaVantageRepo.getDailyHistory(ticker).catch(e => console.error(`[Background] Fehler Historie ${ticker}:`, e.message));
-      alphaVantageRepo.getFundamentalsOverview(ticker).catch(e => console.error(`[Background] Fehler Fundamentals ${ticker}:`, e.message));
-      alphaVantageRepo.getNewsSentiment(ticker).catch(e => console.error(`[Background] Fehler Sentiment ${ticker}:`, e.message));
+      // 2. Hintergrund-Sync anstoßen (ohne await, um UI nicht zu blockieren)
+      // Der StockService kümmert sich um das Abrufen und Persistieren aller Daten.
+      stockService.syncTickerData(ticker).catch(e => {
+        console.error(`[WatchlistController] Hintergrund-Sync Fehler für ${ticker}:`, e.message);
+      });
 
       // Antwort an das Frontend
       return res.status(200).json({ 
@@ -46,6 +43,31 @@ class WatchlistController {
     } catch (err) {
       console.error('[WatchlistController] Fehler beim Hinzufügen:', err.message);
       return res.status(500).json({ error: 'Interner Serverfehler beim Speichern des Tickers.' });
+    }
+  }
+
+  /**
+   * Verknüpft einen Ticker mit einem Basiswert (Korrelation)
+   * POST /api/correlations
+   */
+  async addCorrelation(req, res) {
+    const { mainTicker, linkedTicker, score } = req.body;
+
+    if (!mainTicker || !linkedTicker) {
+      return res.status(400).json({ error: 'Haupt-Ticker oder verknüpfter Ticker fehlt.' });
+    }
+
+    try {
+      intelligenceDAO.upsertCorrelation(
+        mainTicker.toUpperCase(), 
+        linkedTicker.toUpperCase(), 
+        score || 0
+      );
+
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('[WatchlistController] Fehler beim Erstellen der Korrelation:', err.message);
+      return res.status(500).json({ error: 'Interner Serverfehler.' });
     }
   }
 

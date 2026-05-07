@@ -224,3 +224,16 @@ ul {
     font-size: 0.9rem;
     text-align: center;
 }
+
+.correlation-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-family: var(--font-data);
+    font-size: 0.9rem;
+    border-bottom: 1px dotted var(--border);
+}
+
+.correlation-item span:first-child {
+    font-weight: 600;
+}
