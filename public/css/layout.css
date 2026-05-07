@@ -14,6 +14,7 @@ body {
 
 /* --- Header Layout --- */
 #main-header {
+    position: relative;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -26,7 +27,16 @@ body {
 }
 
 #main-header .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
     font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.logo-img {
+    height: 32px;
+    width: auto;
 }
 
 #main-header .settings-icon {
@@ -40,11 +50,13 @@ body {
 #app-container {
     flex-grow: 1;
     display: grid;
-    /* minmax(0, 1fr) erlaubt es der Spalte, kleiner zu werden als ihr Inhalt */
-    grid-template-columns: minmax(0, 1fr) 350px; 
-    gap: 2rem;
-    padding: 2rem;
-    min-height: 0; /* Erlaubt Flex-Items das Schrumpfen */
+    /* 1fr für den Chart (flexibel), 250px für die Watchlist (fest) */
+    grid-template-columns: 1fr 250px; 
+    gap: var(--layout-spacing);
+    padding: var(--layout-spacing);
+    min-height: 0; 
+    width: 100vw;
+    max-width: 100%;
 }
 
 /* --- Linke Spalte (Chart & Details) --- */
@@ -52,13 +64,17 @@ body {
     display: grid;
     /* Chart nimmt den meisten Platz (1fr), Details passen sich an den Inhalt an (auto) */
     grid-template-rows: 1fr auto; 
-    gap: 2rem;
+    gap: var(--layout-spacing);
     min-height: 0;
+    min-width: 0;
+    overflow: hidden;
 }
 
 #chart-container {
     min-height: 400px;
     height: 100%;
+    min-width: 0;
+    overflow: hidden;
 }
 
 /* --- Rechte Spalte (Watchlist) --- */
