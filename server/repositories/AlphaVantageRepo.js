@@ -3,6 +3,12 @@ const axios = require('axios');
 const requestManager = require('../services/RequestManager');
 const Logger = require('../utils/Logger');
 
+/**
+ * Repository für den Zugriff auf die AlphaVantage API.
+ * Intent: Da AlphaVantage im Free-Tier strikte Limits hat (5 Requests/Min, 500/Tag), 
+ * werden alle Anfragen über den RequestManager geschleust. Dieser sorgt für die 
+ * Einhaltung der Zeitabstände und priorisiert wichtige Daten (History) vor Hintergrund-Daten (Sentiment).
+ */
 class AlphaVantageRepo {
   constructor() {
     this.apiKey = process.env.ALPHAVANTAGE_API_KEY;
@@ -11,7 +17,11 @@ class AlphaVantageRepo {
   }
 
   /**
-   * Hilfsfunktion für den eigentlichen API-Call
+   * Hilfsfunktion für den eigentlichen API-Call.
+   * Prüft die Antwort auf provider-spezifische Error-Messages (Rate-Limits).
+   * @param {Object} params - Die Query-Parameter für die API.
+   * @returns {Promise<Object|null>} - Die Rohdaten der API oder null.
+   * @private
    */
   async _fetchFromAPI(params) {
     const urlParams = new URLSearchParams({
@@ -33,7 +43,9 @@ class AlphaVantageRepo {
   }
 
   /**
-   * Holt historische Tagesdaten (Wichtig für neue Ticker -> Prio: P2)
+   * Holt historische Tagesdaten (Wichtig für neue Ticker -> Prio: P2).
+   * @param {string} ticker - Das Aktiensymbol.
+   * @returns {Promise<Object|null>} - Die Zeitreihendaten.
    */
   async getDailyHistory(ticker) {
     const task = () => this._fetchFromAPI({
@@ -47,7 +59,9 @@ class AlphaVantageRepo {
   }
 
   /**
-   * Holt das News Sentiment (Hintergrund-Task -> Prio: P3)
+   * Holt das News Sentiment (Hintergrund-Task -> Prio: P3).
+   * @param {string} ticker - Das Aktiensymbol.
+   * @returns {Promise<Object|null>} - Sentiment-Daten und News-Links.
    */
   async getNewsSentiment(ticker) {
     const task = () => this._fetchFromAPI({
@@ -61,14 +75,18 @@ class AlphaVantageRepo {
   }
 
   /**
-   * Holt Fundamentaldaten: Company Overview (Hintergrund-Task -> Prio: P3)
+   * Holt Fundamentaldaten: Company Overview (Hintergrund-Task -> Prio: P3).
+   * @param {string} ticker - Das Aktiensymbol.
+   * @returns {Promise<Object|null>} - Unternehmensprofil und Kennzahlen.
    */
   async getFundamentalsOverview(ticker) {
     return this.getCompanyOverview(ticker);
   }
 
   /**
-   * Alias für getFundamentalsOverview (Hintergrund-Task -> Prio: P3)
+   * Alias für getFundamentalsOverview (Hintergrund-Task -> Prio: P3).
+   * @param {string} ticker - Das Aktiensymbol.
+   * @returns {Promise<Object|null>} - Unternehmensprofil.
    */
   async getCompanyOverview(ticker) {
     const task = () => this._fetchFromAPI({
@@ -81,7 +99,10 @@ class AlphaVantageRepo {
   }
 
   /**
-   * Holt technische Indikatoren: On-Balance Volume (Hintergrund -> Prio: P3)
+   * Holt technische Indikatoren: On-Balance Volume (Hintergrund -> Prio: P3).
+   * @param {string} ticker - Das Aktiensymbol.
+   * @param {string} [interval='daily'] - Zeitintervall.
+   * @returns {Promise<Object|null>} - OBV-Zeitreihe.
    */
   async getOBV(ticker, interval = 'daily') {
     const task = () => this._fetchFromAPI({

@@ -2,10 +2,16 @@
 const { db } = require('../db/Database');
 const Logger = require('../utils/Logger');
 
+/**
+ * Datenzugriffsobjekt für historische Kursdaten.
+ * Verwaltet das Abrufen und Speichern von Zeitreihendaten in der SQLite-Datenbank.
+ */
 class HistoricalDataDAO {
   
   /**
-   * Holt den letzten gespeicherten Tag für einen Ticker
+   * Holt den letzten gespeicherten Tag für einen Ticker aus der Datenbank.
+   * @param {string} ticker - Das Aktiensymbol (z. B. 'AAPL').
+   * @returns {string|null} - Das Datum im Format 'YYYY-MM-DD' oder null, falls keine Daten vorliegen.
    */
   getLastRecordDate(ticker) {
     const query = `
@@ -19,7 +25,11 @@ class HistoricalDataDAO {
   }
 
   /**
-   * Speichert ein Array von harmonisierten Datenpunkten.
+   * Speichert ein Array von harmonisierten Datenpunkten in einer effizienten Transaktion.
+   * @param {string} ticker - Das Aktiensymbol.
+   * @param {Array<Object>} data - Die Kursdaten (open, high, low, close, volume etc.).
+   * @param {string} [provider='AV'] - Die Quelle der Daten (Default: AlphaVantage).
+   * @returns {number} - Die Anzahl der erfolgreich verarbeiteten Datensätze.
    */
   insertMany(ticker, data, provider = 'AV') {
     if (!data || data.length === 0) { 
@@ -57,7 +67,9 @@ class HistoricalDataDAO {
   }
 
   /**
-   * Holt die komplette Historie aus der DB für das Frontend (Chart)
+   * Holt die komplette Historie für ein Symbol für die Anzeige im Chart-Modul.
+   * @param {string} ticker - Das Aktiensymbol.
+   * @returns {Promise<Array<Object>>|Array<Object>} - Ein Array mit Kursdaten-Objekten (aufsteigend sortiert).
    */
   getHistoryForChart(ticker) {
     const query = `

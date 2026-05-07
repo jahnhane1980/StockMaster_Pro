@@ -1,6 +1,13 @@
 // public/js/services/BackendService.js
 
+/**
+ * StockMaster BackendService
+ * Kapselt die Kommunikation mit der REST-API.
+ */
 class BackendService {
+    /**
+     * Initialisiert den Service.
+     */
     constructor() {
         this.baseUrl = '/api';
     }
@@ -10,7 +17,8 @@ class BackendService {
      * Der Server speichert den Ticker und startet den Daten-Download (History, Fundamentals, Sentiment)
      * im Hintergrund über den RequestManager.
      * 
-     * @param {string} ticker - Das Aktiensymbol (z.B. 'MARA')
+     * @param {string} ticker - Das Aktiensymbol (z.B. 'MARA').
+     * @returns {Promise<Object>} - Die Server-Antwort (success, message).
      */
     async addTickerToWatchlist(ticker) {
         try {
@@ -37,7 +45,8 @@ class BackendService {
      * Holt die aggregierten Intelligence-Daten vom Server.
      * Nutzt Prio 1 (Live-Daten via Massive) und mischt sie mit den gecachten DB-Daten (Alpha Vantage).
      * 
-     * @param {string} ticker - Das Aktiensymbol
+     * @param {string} ticker - Das Aktiensymbol.
+     * @returns {Promise<Object>} - Das vollständige Intelligence-Datenpaket für die UI.
      */
     async getIntelligenceData(ticker) {
         try {
@@ -70,7 +79,8 @@ class BackendService {
 
     /**
      * Holt gezielt Markt-Korrelationen (BTC, Gold) für einen Ticker.
-     * GET /api/intelligence/correlations/:symbol
+     * @param {string} ticker - Das Aktiensymbol.
+     * @returns {Promise<Object|null>} - Korrelationsdaten oder null bei Fehler.
      */
     async getMarketCorrelations(ticker) {
         try {
@@ -89,6 +99,8 @@ class BackendService {
 
     /**
      * Holt gezielt Fundamentaldaten für einen Ticker.
+     * @param {string} ticker - Das Aktiensymbol.
+     * @returns {Promise<Object>} - Die Fundamentaldaten.
      */
     async getFundamentals(ticker) {
         try {
@@ -103,6 +115,10 @@ class BackendService {
 
     /**
      * Erstellt eine Korrelation zwischen zwei Assets.
+     * @param {string} mainTicker - Haupt-Ticker.
+     * @param {string} linkedTicker - Verknüpfter Ticker (z.B. BTC).
+     * @param {number} [score=0] - Initialer Korrelations-Score.
+     * @returns {Promise<Object>} - Die Server-Bestätigung.
      */
     async addCorrelation(mainTicker, linkedTicker, score = 0) {
         try {

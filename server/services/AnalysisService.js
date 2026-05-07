@@ -1,13 +1,22 @@
 // server/services/AnalysisService.js
 
+/**
+ * Service für die statistische Analyse von Marktdaten.
+ * Intent: Dieser Service bietet mathematische Hilfsfunktionen zur Identifikation von 
+ * Zusammenhängen zwischen Assets. Wir nutzen die Pearson-Korrelation, um Signale zu 
+ * gewichten. Ein Koeffizient von > 0.7 gilt als 'starkes' Signal, da hier eine 
+ * hohe lineare Abhängigkeit vorliegt, die für Handelsentscheidungen relevant ist.
+ */
 class AnalysisService {
   
   /**
    * Berechnet die Pearson-Korrelation zwischen zwei historischen Datensätzen.
    * Stellt sicher, dass nur Datenpunkte am exakt selben Tag verglichen werden (Alignment).
+   * Intent: Wir fordern eine Mindest-Stichprobengröße (n=5), um statistisches Rauschen 
+   * bei zu geringer Überlappung zu vermeiden.
    * 
-   * @param {Array} history1 - Erster Datensatz [{date: 'YYYY-MM-DD', close: 100}, ...]
-   * @param {Array} history2 - Zweiter Datensatz (z.B. Benchmark)
+   * @param {Array<Object>} history1 - Erster Datensatz [{date: 'YYYY-MM-DD', close: 100}, ...]
+   * @param {Array<Object>} history2 - Zweiter Datensatz (z.B. Benchmark)
    * @returns {Object} { correlation: number, quality: string, sampleSize: number }
    */
   calculateCorrelation(history1, history2) {
@@ -64,7 +73,10 @@ class AnalysisService {
   }
 
   /**
-   * Qualitative Einordnung des Pearson-Koeffizienten
+   * Qualitative Einordnung des Pearson-Koeffizienten basierend auf statistischen Standards.
+   * @param {number} r - Der berechnete Korrelationskoeffizient (-1 bis 1).
+   * @returns {string} - Eine textuelle Beschreibung der Signalstärke.
+   * @private
    */
   _getQualitativeDescription(r) {
     const absR = Math.abs(r);

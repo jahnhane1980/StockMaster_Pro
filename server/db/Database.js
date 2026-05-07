@@ -3,12 +3,20 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const Logger = require('../utils/Logger');
 
-// Pfad zur SQLite-Datei aus Umgebungsvariablen oder Fallback
+/**
+ * Pfad zur SQLite-Datenbankdatei.
+ * Intent: Wir priorisieren die Umgebungsvariable DB_STORAGE_PATH, um in verschiedenen 
+ * Umgebungen (Prod/Dev/Docker) maximale Flexibilität ohne Code-Änderung zu ermöglichen.
+ * @type {string}
+ */
 const dbPath = process.env.DB_STORAGE_PATH 
     ? path.resolve(process.cwd(), process.env.DB_STORAGE_PATH)
     : path.resolve(__dirname, '../data/stockmaster.db');
 
-// Synchrones Öffnen der Datenbank
+/**
+ * Zentrale Datenbankinstanz (better-sqlite3).
+ * @type {Database}
+ */
 const db = new Database(dbPath, { 
     verbose: (msg) => Logger.info(msg) 
 });
@@ -18,7 +26,9 @@ db.pragma('journal_mode = WAL');
 db.pragma('synchronous = NORMAL');
 
 /**
- * Tabellen initialisieren (Synchron beim Start)
+ * Initialisiert das Datenbankschema beim Anwendungsstart.
+ * Erstellt alle notwendigen Tabellen und Indizes, falls diese noch nicht existieren.
+ * @returns {void}
  */
 const initDB = () => {
     Logger.info(`[DB] Initialisiere Tabellen unter: ${dbPath}`);

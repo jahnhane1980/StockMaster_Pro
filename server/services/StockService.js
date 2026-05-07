@@ -7,18 +7,30 @@ const HistoricalDataDAO = require('../models/HistoricalDataDAO');
 const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
 
+/**
+ * Zentraler Orchestrierungs-Service für Aktiendaten.
+ * Intent: Dieser Service implementiert die Geschäftslogik für die Datenbeschaffung. 
+ * Er verwaltet die Fallback-Hierarchie zwischen Providern: AlphaVantage wird für 
+ * initiale historische Daten (P2) und Hintergrund-Sentiment (P3) genutzt, während 
+ * Massive für kritische Echtzeit-Kurse (P1) und das Schließen von Datenlücken (Diffs) 
+ * priorisiert wird. Zudem steuert er die Cache-Validierung (z. B. Fundamentals alle 30 Tage).
+ */
 class StockService {
 
   /**
-   * Holt den Echtzeit-Preis über den RequestManager (Massive P1)
+   * Holt den Echtzeit-Preis über den RequestManager (Massive P1).
+   * @param {string} symbol - Das Aktiensymbol.
+   * @returns {Promise<Object>} - Das Preis-Objekt.
    */
   async getRealtimeQuote(symbol) {
     return RequestManager.enqueue('P1', 'MASSIVE', () => MassiveRepo.getRealtimeQuote(symbol));
   }
 
   /**
-   * Synchronisiert alle Daten für einen Ticker (Realtime, Historie, News-Sentiment)
+   * Synchronisiert alle Daten für einen Ticker (Realtime, Historie, News-Sentiment).
    * Wird typischerweise im Hintergrund aufgerufen (z.B. beim Hinzufügen zur Watchlist).
+   * @param {string} symbol - Das Aktiensymbol.
+   * @returns {Promise<boolean>} - True bei Erfolg.
    */
   async syncTickerData(symbol) {
     Logger.info(`[StockService] Starte Full-Sync für: ${symbol}`);
@@ -70,6 +82,9 @@ class StockService {
   /**
    * Die Hauptfunktion, die vom Controller/Frontend aufgerufen wird,
    * wenn ein User auf einen Ticker im Intelligence Board klickt.
+   * Intent: Kombiniert lokale Cache-Daten mit On-Demand API-Anfragen.
+   * @param {string} ticker - Das Aktiensymbol.
+   * @returns {Promise<Object>} - Das Intelligence-DTO für das Frontend.
    */
   async getIntelligenceData(ticker) {
     try {
@@ -172,8 +187,9 @@ class StockService {
   }
 
   /**
-   * Berechnet die Korrelations-Scores für einen Ticker neu,
-   * basierend auf den in der DB vorhandenen historischen Daten.
+   * Berechnet die Korrelations-Scores für einen Ticker neu.
+   * @param {string} ticker - Das Aktiensymbol.
+   * @returns {Promise<void>}
    */
   async recalculateCorrelations(ticker) {
     try {
@@ -207,6 +223,10 @@ class StockService {
 
   /**
    * Prüft, ob die Daten in der DB älter als X Tage sind.
+   * @param {string} lastUpdated - ISO Timestamp.
+   * @param {number} [days=1] - Schwellenwert in Tagen.
+   * @returns {boolean} - True, wenn die Daten veraltet sind.
+   * @private
    */
   _isDataStale(lastUpdated, days = 1) {
     if (!lastUpdated) return true;
@@ -215,7 +235,10 @@ class StockService {
   }
 
   /**
-   * Harmonisiert die Alpha Vantage Historie
+   * Harmonisiert die Alpha Vantage Historie in das interne Format.
+   * @param {Object} rawData - Die Rohdaten von AV.
+   * @returns {Array<Object>} - Liste harmonisierter Datenpunkte.
+   * @private
    */
   _mapAlphaVantageHistory(rawData) {
     const timeSeries = rawData['Time Series (Daily)'];
@@ -236,7 +259,10 @@ class StockService {
   }
 
   /**
-   * Harmonisiert die Massive Historie
+   * Harmonisiert die Massive Historie in das interne Format.
+   * @param {Object|Array} rawData - Die Rohdaten von Massive.
+   * @returns {Array<Object>} - Liste harmonisierter Datenpunkte.
+   * @private
    */
   _mapMassiveHistory(rawData) {
     // Massive API Mapping: Wir erwarten hier das Format von Massive
@@ -258,7 +284,11 @@ class StockService {
   }
 
   /**
-   * Harmonisiert das Alpha Vantage Sentiment
+   * Harmonisiert das Alpha Vantage Sentiment.
+   * @param {Object} rawData - Rohdaten von AV.
+   * @param {string} ticker - Der Ticker, für den das Sentiment relevant ist.
+   * @returns {Array<Object>} - Liste von Sentiment-Einträgen.
+   * @private
    */
   _mapAlphaVantageSentiment(rawData, ticker) {
     if (!rawData || !rawData.feed) return [];
@@ -275,7 +305,10 @@ class StockService {
   }
 
   /**
-   * Hilfsfunktion zum Formatieren von AV Zeitstempeln (YYYYMMDDTHHMMSS -> ISO)
+   * Hilfsfunktion zum Formatieren von AV Zeitstempeln (YYYYMMDDTHHMMSS -> ISO).
+   * @param {string} ts - AV Zeitstempel.
+   * @returns {string} - ISO Zeitstempel.
+   * @private
    */
   _formatAVTimestamp(ts) {
     if (!ts) return new Date().toISOString();
@@ -289,7 +322,10 @@ class StockService {
   }
 
   /**
-   * Harmonisiert die Alpha Vantage OBV Daten
+   * Harmonisiert die Alpha Vantage OBV Daten.
+   * @param {Object} rawData - Rohdaten von AV.
+   * @returns {Object|null} - Harmonisierter OBV-Wert.
+   * @private
    */
   _mapAlphaVantageOBV(rawData) {
     if (!rawData || !rawData['Technical Analysis: OBV']) return null;
@@ -302,7 +338,10 @@ class StockService {
   }
 
   /**
-   * Harmonisiert die Alpha Vantage Fundamentaldaten
+   * Harmonisiert die Alpha Vantage Fundamentaldaten.
+   * @param {Object} rawData - Rohdaten von AV.
+   * @returns {Object} - Harmonisierte Metadaten.
+   * @private
    */
   _mapAlphaVantageFundamentals(rawData) {
     if (!rawData || !rawData.Symbol) return {};

@@ -1,9 +1,17 @@
 // server/services/RequestManager.js
 const Logger = require('../utils/Logger');
 
+/**
+ * Zentraler Manager für alle ausgehenden API-Anfragen an externe Provider.
+ * Intent: Um Provider-Limits (z. B. AlphaVantage 5 Req/Min) strikt einzuhalten, 
+ * implementiert dieser Service ein prioritätsbasiertes Queue-System (P1-P3). 
+ * Durch das asynchrone Queue-Modell und Zeitabstände (setImmediate/setTimeout) wird sichergestellt, 
+ * dass kritische Real-Time-Daten (P1) bevorzugt behandelt werden, während Hintergrund-Tasks 
+ * (Sentiment/History) gedrosselt abgearbeitet werden.
+ */
 class RequestManager {
   constructor() {
-    // Queue für die verschiedenen Prioritäten
+    /** @type {Object<string, Array<Object>>} Warteschlangen nach Priorität */
     this.queues = {
       P1: [], // Kritisch (Real-Time, Massive)
       P2: [], // Wichtig (History, AV)
@@ -12,25 +20,28 @@ class RequestManager {
 
     // Limits & Tracking
     this.avDailyLimit = 25;
-    this.avRequestsToday = 0; // Für Produktionsbetrieb später evtl. an eine DB koppeln
+    this.avRequestsToday = 0; 
     this.avRequestsPerMinute = 5;
     this.avRequestsThisMinute = 0;
     
     // Status
     this.isProcessing = false;
     
-    // Reset Timer für das Minutenlimit
+    // Reset Timer für das Minutenlimit (60 Sek)
     setInterval(() => { this.avRequestsThisMinute = 0; }, 60000); 
   }
 
-  // Methode, um einen Request in die Warteschlange zu stellen
-  // priority: 'P1', 'P2' oder 'P3'
-  // provider: 'AV' oder 'MASSIVE'
-  // taskFn: Die asynchrone Axios/Fetch Funktion
+  /**
+   * Fügt einen asynchronen Task der entsprechenden Warteschlange hinzu.
+   * @param {string} priority - 'P1', 'P2' oder 'P3'.
+   * @param {string} provider - 'AV' oder 'MASSIVE'.
+   * @param {Function} taskFn - Die asynchrone Funktion (Promise), die den API-Call ausführt.
+   * @returns {Promise<any>} - Versprechen, das mit dem API-Ergebnis aufgelöst wird.
+   */
   enqueue(priority, provider, taskFn) {
     return new Promise((resolve, reject) => {
       this.queues[priority].push({
-        priority, // Speichern der Prio für evtl. Requeuing
+        priority, 
         provider,
         taskFn,
         resolve,
@@ -41,6 +52,12 @@ class RequestManager {
     });
   }
 
+  /**
+   * Arbeitet die Warteschlangen unter Berücksichtigung der Priorität und Rate-Limits ab.
+   * Intent: P1 Tasks werden immer bevorzugt, außer ein Provider-Limit (AV) verhindert die Ausführung.
+   * @returns {Promise<void>}
+   * @private
+   */
   async processQueue() {
     if (this.isProcessing) return;
     
@@ -66,10 +83,9 @@ class RequestManager {
     }
 
     if (!nextTask) {
-      // Falls wir nur noch AV Tasks haben, aber im Limit sind, warten wir kurz
+      // Falls wir nur noch AV Tasks haben, aber im Limit sind, warten wir kurz (1 Sek)
       const hasAVTasks = this.queues.P1.length > 0 || this.queues.P2.length > 0 || this.queues.P3.length > 0;
       if (hasAVTasks) {
-        // Logger.info("[RIM] Nur noch AV Tasks in der Queue, aber Limit erreicht. Warte...");
         setTimeout(() => this.processQueue(), 1000);
       }
       return;
@@ -96,12 +112,17 @@ class RequestManager {
       }
     } finally {
       this.isProcessing = false;
-      // Sofort weitermachen, falls noch was in der Queue ist
+      // Sofort weitermachen (setImmediate), um die Performance der Queue hochzuhalten
       setImmediate(() => this.processQueue());
     }
   }
 
-  // Hilfsfunktion zum asynchronen Warten
+  /**
+   * Hilfsfunktion zum asynchronen Warten.
+   * @param {number} ms - Millisekunden.
+   * @returns {Promise<void>}
+   * @private
+   */
   _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }

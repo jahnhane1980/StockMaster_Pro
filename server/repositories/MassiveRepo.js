@@ -3,6 +3,10 @@ const axios = require('axios');
 const requestManager = require('../services/RequestManager');
 const Logger = require('../utils/Logger');
 
+/**
+ * Repository für den Zugriff auf die Massive API (Hochverfügbare Marktdaten).
+ * Wird primär für Echtzeit-Kurse und Intraday-Daten mit hoher Priorität (P1) genutzt.
+ */
 class MassiveRepo {
   constructor() {
     this.apiKey = process.env.MASSIVE_API_KEY;
@@ -14,7 +18,11 @@ class MassiveRepo {
   }
 
   /**
-   * Hilfsfunktion für den eigentlichen API-Call an Massive
+   * Hilfsfunktion für den eigentlichen API-Call an Massive.
+   * @param {string} endpoint - Der API-Endpunkt.
+   * @param {Object} [params={}] - Optionale Query-Parameter.
+   * @returns {Promise<Object|null>} - Die Antwortdaten der API.
+   * @private
    */
   async _fetchFromAPI(endpoint, params = {}) {
     try {
@@ -36,7 +44,9 @@ class MassiveRepo {
   }
 
   /**
-   * Holt den absoluten Echtzeit-Kurs für das Board (Höchste Prio: P1)
+   * Holt den absoluten Echtzeit-Kurs für das Board (Höchste Prio: P1).
+   * @param {string} ticker - Das Aktiensymbol.
+   * @returns {Promise<Object|null>} - Das aktuelle Kurs-Objekt.
    */
   async getRealtimeQuote(ticker) {
     const task = () => this._fetchFromAPI(`/stocks/${ticker}/quote`);
@@ -46,7 +56,9 @@ class MassiveRepo {
   }
 
   /**
-   * Holt Intraday-Daten (z.B. für VWAP Berechnung im Intelligence Board) (Prio: P1)
+   * Holt Intraday-Daten (z.B. für VWAP Berechnung im Intelligence Board) (Prio: P1).
+   * @param {string} ticker - Das Aktiensymbol.
+   * @returns {Promise<Object|null>} - Die Intraday-Zeitreihe.
    */
   async getIntradayData(ticker) {
     const task = () => this._fetchFromAPI(`/stocks/${ticker}/intraday`, {
@@ -58,8 +70,12 @@ class MassiveRepo {
   }
 
   /**
-   * Holt historische Tagesdaten für einen bestimmten Zeitraum (Prio: P1)
+   * Holt historische Tagesdaten für einen bestimmten Zeitraum (Prio: P1).
    * Wird genutzt, um die Lücke zwischen dem letzten DB-Eintrag und heute zu füllen.
+   * @param {string} ticker - Das Aktiensymbol.
+   * @param {string} fromDate - Startdatum (YYYY-MM-DD).
+   * @param {string} toDate - Enddatum (YYYY-MM-DD).
+   * @returns {Promise<Object|null>} - Die historischen Kursdaten.
    */
   async getHistoricalData(ticker, fromDate, toDate) {
     const task = () => this._fetchFromAPI(`/stocks/${ticker}/history`, {

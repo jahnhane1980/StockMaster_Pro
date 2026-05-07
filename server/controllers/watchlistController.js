@@ -5,11 +5,19 @@ const StockService = require('../services/StockService');
 const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
 
+/**
+ * Controller für die Verwaltung der Watchlist und des Intelligence Boards.
+ */
 class WatchlistController {
   
   /**
-   * Wird aufgerufen, wenn das Frontend einen neuen Ticker hinzufügt
+   * Wird aufgerufen, wenn das Frontend einen neuen Ticker hinzufügt.
    * POST /api/watchlist
+   * 
+   * @param {Object} req - Das Express Request-Objekt. Erwartet { symbol: string, name?: string } im Body.
+   * @param {Object} res - Das Express Response-Objekt.
+   * @returns {Promise<void>} - Sendet eine JSON-Antwort mit Erfolgsstatus.
+   * Antwort-Schema: { success: boolean, message: string }
    */
   async addTickerToWatchlist(req, res) {
     const { symbol, name } = req.body;
@@ -21,7 +29,7 @@ class WatchlistController {
     const ticker = symbol.toUpperCase();
 
     try {
-      // 1. Ticker in der Datenbank speichern
+      // 1. Ticker in der Datenbank speichern (Initialer Eintrag)
       TickerRepository.upsertTicker({ 
         symbol: ticker, 
         name: name || '' 
@@ -48,8 +56,12 @@ class WatchlistController {
   }
 
   /**
-   * Verknüpft einen Ticker mit einem Basiswert (Korrelation)
+   * Verknüpft einen Ticker mit einem Basiswert (Korrelation).
    * POST /api/correlations
+   * 
+   * @param {Object} req - Das Express Request-Objekt. Erwartet { mainTicker, linkedTicker, score } im Body.
+   * @param {Object} res - Das Express Response-Objekt.
+   * @returns {Promise<void>} - Sendet JSON-Erfolgsstatus { success: boolean }.
    */
   async addCorrelation(req, res) {
     const { mainTicker, linkedTicker, score } = req.body;
@@ -73,13 +85,18 @@ class WatchlistController {
   }
 
   /**
-   * Wird aufgerufen, wenn im Frontend auf eine Aktie geklickt wird
+   * Wird aufgerufen, wenn im Frontend auf eine Aktie geklickt wird (Board-Daten laden).
    * GET /api/intelligence/:ticker
+   * 
+   * @param {Object} req - Das Express Request-Objekt.
+   * @param {Object} res - Das Express Response-Objekt.
+   * @returns {Promise<void>} - Sendet eine JSON-Antwort mit dem aggregierten Datenpaket (DTO).
    */
   async getIntelligenceBoard(req, res) {
     const ticker = req.params.ticker.toUpperCase();
 
     try {
+      // StockService aggregiert Daten von verschiedenen Providern und aus der DB.
       const intelligenceData = await StockService.getIntelligenceData(ticker);
       return res.status(200).json(intelligenceData);
     } catch (error) {

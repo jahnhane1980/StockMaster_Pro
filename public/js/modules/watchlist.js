@@ -10,6 +10,7 @@ window.StockMaster.WatchlistModule = (() => {
 
   /**
    * Initialisiert das Modul und registriert Event-Listener.
+   * @returns {Promise<void>}
    */
   const init = async () => {
     // UI-Interaktionen
@@ -39,6 +40,7 @@ window.StockMaster.WatchlistModule = (() => {
   /**
    * Triggert den Ladevorgang im Repository an.
    * Gemäß SoC: Keine direkte Verarbeitung der Rückgabewerte.
+   * @returns {Promise<void>}
    */
   const loadData = async () => {
     if (window.StockMaster.TickerRepository) {
@@ -49,11 +51,14 @@ window.StockMaster.WatchlistModule = (() => {
   /**
    * Callback für das TICKERS_LOADED Event.
    * Übernimmt das asynchrone Rendering der Liste.
+   * @param {CustomEvent} event - Das Event-Objekt mit der Ticker-Liste im Detail-Feld.
+   * @returns {void}
    */
   const handleTickersLoaded = (event) => {
     const { tickers } = event.detail;
     if (!watchlistContainer) return;
 
+    // UI-Hygiene: Container leeren, bevor neu gerendert wird, um Duplikate zu vermeiden.
     watchlistContainer.innerHTML = ''; 
     
     if (!tickers || tickers.length === 0) {
@@ -66,6 +71,8 @@ window.StockMaster.WatchlistModule = (() => {
 
   /**
    * Callback für das TICKER_DELETED Event.
+   * @param {CustomEvent} event - Das Event-Objekt mit dem gelöschten Symbol.
+   * @returns {void}
    */
   const handleTickerDeleted = (event) => {
     const { symbol } = event.detail;
@@ -75,11 +82,14 @@ window.StockMaster.WatchlistModule = (() => {
 
   /**
    * Zentrales Error-Handling für Repository-Fehler.
+   * @param {CustomEvent} event - Das Event-Objekt mit Fehlermeldung und Quelle.
+   * @returns {void}
    */
   const handleGlobalError = (event) => {
     const { message, source } = event.detail;
     console.error(`[Watchlist] Fehler von ${source}: ${message}`);
     
+    // Fehler an den globalen NotificationService delegieren, um ein konsistentes UI-Feedback zu geben.
     if (window.StockMaster.Events) {
       document.dispatchEvent(new CustomEvent(window.StockMaster.Events.GLOBAL_NOTIFICATION, {
         detail: { type: 'error', message: message }
@@ -89,6 +99,8 @@ window.StockMaster.WatchlistModule = (() => {
 
   /**
    * Behandelt das Hinzufügen eines neuen Tickers.
+   * Validiert die Eingabe und kommuniziert mit dem BackendService.
+   * @returns {Promise<void>}
    */
   const handleAddTicker = async () => {
     const symbol = searchInput.value.toUpperCase().trim();
@@ -100,6 +112,7 @@ window.StockMaster.WatchlistModule = (() => {
       await window.backendService.addTickerToWatchlist(symbol);
 
       if (window.StockMaster.Events) {
+        // TICKER_ADDED triggert das automatische Refresh der Liste.
         document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_ADDED, { 
           detail: { symbol: symbol } 
         }));
@@ -120,6 +133,8 @@ window.StockMaster.WatchlistModule = (() => {
 
   /**
    * Rendert ein einzelnes Ticker-Element.
+   * @param {Object} item - Das Ticker-Datenobjekt (symbol, etc.).
+   * @returns {void}
    */
   const renderTicker = (item) => {
     const div = document.createElement('div');
@@ -131,6 +146,7 @@ window.StockMaster.WatchlistModule = (() => {
     symbolSpan.textContent = item.symbol;
     div.appendChild(symbolSpan);
 
+    // Klick-Listener zum Auswählen einer Aktie (Intelligence-Board Update).
     div.addEventListener('click', () => {
       if (window.StockMaster.Events) {
         document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_SELECTED, { 
@@ -138,6 +154,7 @@ window.StockMaster.WatchlistModule = (() => {
         }));
       }
       
+      // Visuelle Markierung des ausgewählten Elements.
       document.querySelectorAll('.watchlist-item').forEach(el => el.classList.remove('active'));
       div.classList.add('active');
     });
@@ -146,6 +163,7 @@ window.StockMaster.WatchlistModule = (() => {
     deleteBtn.setAttribute('name', 'trash-outline');
     deleteBtn.className = 'delete-btn-icon';
 
+    // Separater Listener für den Lösch-Button (StopPropagation verhindert Selektion beim Löschen).
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (window.StockMaster.TickerRepository) {

@@ -2,6 +2,10 @@
 const { db } = require('../db/Database');
 const Logger = require('../utils/Logger');
 
+/**
+ * Datenzugriffsobjekt für Market Intelligence Daten.
+ * Verwaltet Fundamentaldaten (Metadata), Sentiment-Analysen und Asset-Korrelationen.
+ */
 class IntelligenceDAO {
   
   // ==========================================
@@ -9,7 +13,10 @@ class IntelligenceDAO {
   // ==========================================
 
   /**
-   * Aktualisiert oder erstellt Fundamentaldaten
+   * Aktualisiert oder erstellt Fundamentaldaten für ein Symbol.
+   * @param {string} ticker - Das Aktiensymbol.
+   * @param {Object} data - Die Metadaten (Market Cap, Kennzahlen, Timestamps).
+   * @returns {number} - Die Anzahl der betroffenen Zeilen.
    */
   upsertMetadata(ticker, data) {
     const sql = `
@@ -33,7 +40,9 @@ class IntelligenceDAO {
   }
 
   /**
-   * Holt die Metadaten (für das Intelligence Board)
+   * Holt die Metadaten für ein Symbol (z. B. für das Intelligence Board).
+   * @param {string} ticker - Das Aktiensymbol.
+   * @returns {Object|undefined} - Das Metadaten-Objekt oder undefined, falls nicht vorhanden.
    */
   getMetadata(ticker) {
     const stmt = db.prepare(`SELECT * FROM market_metadata WHERE ticker = ?`);
@@ -46,7 +55,10 @@ class IntelligenceDAO {
   // ==========================================
 
   /**
-   * Speichert neue Sentiment-Daten
+   * Speichert ein Array von News-Sentiment-Daten in der Historie.
+   * @param {string} ticker - Das Aktiensymbol.
+   * @param {Array<Object>} sentiments - Array mit Sentiment-Objekten (score, relevance, timestamp).
+   * @returns {number} - Die Anzahl der verarbeiteten Einträge.
    */
   insertSentiment(ticker, sentiments) {
     if (!sentiments || sentiments.length === 0) return 0;
@@ -70,7 +82,10 @@ class IntelligenceDAO {
   }
 
   /**
-   * Holt die aktuellsten Sentiment-Scores
+   * Holt die aktuellsten Sentiment-Scores für einen Ticker.
+   * @param {string} ticker - Das Aktiensymbol.
+   * @param {number} [limit=20] - Maximale Anzahl der Einträge.
+   * @returns {Array<Object>} - Liste der Sentiment-Einträge.
    */
   getLatestSentiment(ticker, limit = 20) {
     const stmt = db.prepare(`
@@ -88,7 +103,11 @@ class IntelligenceDAO {
   // ==========================================
 
   /**
-   * Verknüpft eine Aktie mit einem Basiswert
+   * Verknüpft eine Aktie mit einem Basiswert (z. B. Korrelation mit Gold oder BTC).
+   * @param {string} mainTicker - Das primäre Aktiensymbol.
+   * @param {string} linkedTicker - Das Symbol des verknüpften Assets.
+   * @param {number} [score=0] - Der Korrelations-Score.
+   * @returns {number|bigint} - Die ID des neuen/aktualisierten Eintrags.
    */
   upsertCorrelation(mainTicker, linkedTicker, score = 0) {
     const stmt = db.prepare(`
@@ -102,7 +121,9 @@ class IntelligenceDAO {
   }
 
   /**
-   * Holt alle verknüpften Basiswerte für einen Ticker (z.B. BTC für MARA)
+   * Holt alle verknüpften Assets für einen Ticker (z. B. BTC für Krypto-Aktien).
+   * @param {string} mainTicker - Das primäre Aktiensymbol.
+   * @returns {Array<Object>} - Liste der verknüpften Assets und deren Scores.
    */
   getCorrelations(mainTicker) {
     const stmt = db.prepare(`

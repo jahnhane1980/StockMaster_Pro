@@ -3,11 +3,19 @@ const HistoricalDataDAO = require('../models/HistoricalDataDAO');
 const AnalysisService = require('../services/AnalysisService');
 const Logger = require('../utils/Logger');
 
+/**
+ * Controller für komplexe Markt-Analysen und Intelligence-Abfragen.
+ */
 class IntelligenceController {
 
   /**
-   * Berechnet Korrelationen eines Symbols zu Markt-Benchmarks (BTC, Gold)
+   * Berechnet Korrelationen eines Symbols zu Markt-Benchmarks (BTC, Gold).
    * GET /api/intelligence/correlations/:symbol
+   * 
+   * @param {Object} req - Das Express Request-Objekt.
+   * @param {Object} res - Das Express Response-Objekt.
+   * @returns {Promise<void>} - Sendet eine JSON-Antwort mit Korrelations-Scores.
+   * Antwort-Schema: { symbol: string, timestamp: string, correlations: { btc: Object, gold: Object } }
    */
   async getMarketCorrelations(req, res) {
     const symbol = req.params.symbol.toUpperCase();
@@ -15,7 +23,7 @@ class IntelligenceController {
     try {
       Logger.info(`[IntelligenceController] Berechne Markt-Korrelationen für: ${symbol}`);
 
-      // 1. Historische Daten abrufen
+      // 1. Historische Daten abrufen: Basis für die mathematische Korrelation
       const mainHistory = await HistoricalDataDAO.getHistoryForChart(symbol);
       const btcHistory = await HistoricalDataDAO.getHistoryForChart('BTC');
       const goldHistory = await HistoricalDataDAO.getHistoryForChart('GOLD');
@@ -27,7 +35,7 @@ class IntelligenceController {
         });
       }
 
-      // 2. Korrelationen berechnen
+      // 2. Korrelationen berechnen: Pearson-Algorithmus via AnalysisService
       const correlations = {};
 
       if (btcHistory && btcHistory.length >= 10) {

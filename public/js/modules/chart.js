@@ -8,7 +8,8 @@ window.StockMaster.ChartModule = (() => {
     let candleSeries;
 
     /**
-     * Initialisiert den TradingView Lightweight Chart
+     * Initialisiert den TradingView Lightweight Chart.
+     * @returns {void}
      */
     const init = () => {
         const container = document.getElementById(chartContainerId);
@@ -17,7 +18,7 @@ window.StockMaster.ChartModule = (() => {
             return;
         }
 
-        // Chart-Konfiguration (Farben & Design passend zum Look & Feel)
+        // Chart-Konfiguration: Transparenter Hintergrund zur nahtlosen Integration in das CSS-Layout.
         chart = LightweightCharts.createChart(container, {
             layout: {
                 background: { type: 'solid', color: 'transparent' },
@@ -42,7 +43,7 @@ window.StockMaster.ChartModule = (() => {
             },
         });
 
-        // Kerzen-Serie hinzufügen
+        // Kerzen-Serie: Definierte Farben für Bullish/Bearish Trends passend zur Farbpalette.
         candleSeries = chart.addCandlestickSeries({
             upColor: '#00e676',
             downColor: '#ff5252',
@@ -51,13 +52,13 @@ window.StockMaster.ChartModule = (() => {
             wickDownColor: '#ff5252',
         });
 
-        // Event-Listener für neue Daten registrieren
+        // Event-Listener für neue Daten registrieren (Orchestriert durch IntelligenceModule).
         if (window.StockMaster.Events) {
             document.addEventListener(window.StockMaster.Events.CHART_DATA_READY, handleDataReady);
             console.log('[ChartModule] Initialisiert und bereit für Daten.');
         }
 
-        // Responsive Resizing
+        // Responsive Resizing: Sorgt dafür, dass der Chart bei Panel-Größenänderungen mitwächst.
         new ResizeObserver(entries => {
             if (entries.length === 0 || entries[0].target !== container) return;
             const newRect = entries[0].contentRect;
@@ -66,7 +67,10 @@ window.StockMaster.ChartModule = (() => {
     };
 
     /**
-     * Verarbeitet das CHART_DATA_READY Event
+     * Verarbeitet das CHART_DATA_READY Event.
+     * Mappt die Repository-Daten auf das Format der Lightweight Charts Library.
+     * @param {CustomEvent} event - Das Event-Objekt mit Symbol und Historie.
+     * @returns {void}
      */
     const handleDataReady = (event) => {
         const { symbol, history, correlations } = event.detail;
@@ -77,30 +81,29 @@ window.StockMaster.ChartModule = (() => {
             return;
         }
 
-        // Daten für Lightweight Charts formatieren
-        // Wir gehen davon aus, dass history bereits harmonisierte Objekte enthält
+        // Daten-Mapping: Umwandlung in library-spezifisches Format {time, open, high, low, close}.
         const formattedData = history.map(item => ({
-            time: item.date, // Format: YYYY-MM-DD
+            time: item.date, // Format: YYYY-MM-DD (ISO 8601 wird von der Library bevorzugt).
             open: parseFloat(item.open),
             high: parseFloat(item.high),
             low: parseFloat(item.low),
             close: parseFloat(item.close)
         }));
 
-        // Sortierung sicherstellen (Lightweight Charts benötigt aufsteigende Zeit)
+        // Warum Sortierung: Lightweight Charts benötigt zwingend chronologisch aufsteigende Zeitstempel.
         formattedData.sort((a, b) => (a.time > b.time ? 1 : -1));
 
         candleSeries.setData(formattedData);
         
-        // Den Chart auf die Daten fokussieren
+        // Automatischer Zoom auf den verfügbaren Datenzeitraum.
         chart.timeScale().fitContent();
 
         console.log(`[ChartModule] Chart für ${symbol} aktualisiert (${formattedData.length} Datenpunkte).`);
         
-        // Optional: Korrelations-Daten verarbeiten (z.B. als Overlay oder Label)
+        // Optional: Korrelations-Daten verarbeiten (z.B. als Overlay oder Label).
         if (correlations && correlations.length > 0) {
             console.log(`[ChartModule] Korrelierte Assets erkannt:`, correlations.map(c => c.symbol));
-            // Hier könnte zukünftig ein LineSeries Overlay für BTC/Gold etc. implementiert werden.
+            // Placeholder für zukünftige Overlay-Implementierungen (z.B. BTC-Preis-Overlay).
         }
     };
 
