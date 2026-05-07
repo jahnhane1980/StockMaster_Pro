@@ -7,7 +7,7 @@ if not exist "node_modules" (
 )
 
 echo [2/3] Starte Node.js Server...
-start /b node server/server.js
+start /b node server/Server.js
 
 echo [3/3] Oeffne Browser...
 timeout /t 2 /nobreak > nul

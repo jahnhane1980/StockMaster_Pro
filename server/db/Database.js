@@ -1,15 +1,16 @@
-// server/database.js
+// server/db/Database.js
 const Database = require('better-sqlite3');
 const path = require('path');
-const Logger = require('./utils/Logger');
+const Logger = require('../utils/Logger');
 
-// Pfad zur SQLite-Datei
-const dbPath = path.resolve(__dirname, 'stockmaster.db');
+// Pfad zur SQLite-Datei aus Umgebungsvariablen oder Fallback
+const dbPath = process.env.DB_STORAGE_PATH 
+    ? path.resolve(process.cwd(), process.env.DB_STORAGE_PATH)
+    : path.resolve(__dirname, '../data/stockmaster.db');
 
 // Synchrones Öffnen der Datenbank
-// better-sqlite3 öffnet die Verbindung sofort beim Instanziieren
 const db = new Database(dbPath, { 
-    verbose: (msg) => Logger.info(msg) // Kann für tiefere Analysen aktiviert werden
+    verbose: (msg) => Logger.info(msg) 
 });
 
 // Performance-Optimierungen für SQLite (WAL Mode ist für Concurrent Reads/Writes empfohlen)
@@ -18,12 +19,10 @@ db.pragma('synchronous = NORMAL');
 
 /**
  * Tabellen initialisieren (Synchron beim Start)
- * Diese Funktion wird direkt nach dem Laden des Moduls aufgerufen.
  */
 const initDB = () => {
-    Logger.info('[DB] Initialisiere Tabellen mit better-sqlite3...');
+    Logger.info(`[DB] Initialisiere Tabellen unter: ${dbPath}`);
 
-    // Wir nutzen ein Try-Catch Block, um Fehler bei der Initialisierung abzufangen
     try {
         // 1. TICKERS (Zentrale Tabelle für die Watchlist)
         db.prepare(`CREATE TABLE IF NOT EXISTS tickers (
@@ -98,12 +97,11 @@ const initDB = () => {
         Logger.info('[DB] Alle Tabellen erfolgreich geprüft/erstellt.');
     } catch (err) {
         Logger.error(`[DB] Kritischer Fehler bei der Tabellen-Initialisierung: ${err.message}`);
-        throw err; // Anwendung sollte bei DB-Fehlern nicht starten
+        throw err;
     }
 };
 
 // Initialisierung sofort beim Laden ausführen
 initDB();
 
-// Exportiere das db-Objekt (Singleton) und die initDB Funktion für server.js
 module.exports = { db, initDB };

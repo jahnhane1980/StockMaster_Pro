@@ -148,3 +148,6 @@ server/.env
 
 # Logger ignorieren
 server/logs/*
+
+# Daten ignorieren
+server/data/*

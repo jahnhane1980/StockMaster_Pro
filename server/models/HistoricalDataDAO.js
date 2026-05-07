@@ -1,5 +1,5 @@
 // server/models/HistoricalDataDAO.js
-const { db } = require('../database');
+const { db } = require('../db/Database');
 const Logger = require('../utils/Logger');
 
 class HistoricalDataDAO {

@@ -1,5 +1,5 @@
 // server/controllers/watchlistController.js
-const { db } = require('../database');
+const { db } = require('../db/Database');
 const TickerRepository = require('../repositories/tickerRepository');
 const stockService = require('../services/StockService');
 const intelligenceDAO = require('../models/IntelligenceDAO');

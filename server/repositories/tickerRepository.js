@@ -1,4 +1,4 @@
-const { db } = require('../database');
+const { db } = require('../db/Database');
 const RequestManager = require('../services/RequestManager');
 const MassiveRepo = require('./MassiveRepo');
 

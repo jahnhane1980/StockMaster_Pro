@@ -1,7 +1,7 @@
 require('dotenv').config(); 
 const express = require('express');
 const path = require('path');
-const { initDB } = require('./database');
+const { initDB } = require('./db/Database');
 
 // Repositories
 const TickerRepository = require('./repositories/tickerRepository');
