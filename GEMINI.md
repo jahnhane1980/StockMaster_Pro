@@ -1,4 +1,4 @@
-# 🛡️ StockMaster Code-Buddy Protokoll (V5.0)
+# 🛡️ StockMaster Code-Buddy Protokoll (V5.1)
 
 Dieses Dokument ist die oberste Instanz für alle Code-Änderungen. Jede Anweisung des CLI muss gegen dieses Regelwerk validiert werden.
 
@@ -70,6 +70,10 @@ Dieses Dokument ist die oberste Instanz für alle Code-Änderungen. Jede Anweisu
     * **Pflicht:** Es muss zwingend das zentrale `Logger`-Modul verwendet werden.
     * **Struktur:** Logs müssen in `server/logs/` persistiert werden. Fehler-Logs müssen immer den Error-Stack und den Kontext enthalten.
     * **Rotation:** Dateien müssen durch das System (z. B. winston-daily-rotate-file) rotiert werden.
+* **Regel 21 (Infrastruktur-Trennung):** Strikte physische Trennung von Programmlogik und persistenten Daten.
+    * **Logik-Ort:** Code zur Datenbankanbindung liegt in `./server/db/Database.js`.
+    * **Daten-Ort:** Persistente Datenspeicher (z. B. SQLite-Dateien) liegen im Verzeichnis `./server/data/`.
+    * **Abstraktion:** Dateipfade für den Datenzugriff müssen zwingend über Umgebungsvariablen (z. B. `DB_STORAGE_PATH`) gesteuert werden.
 
 ---
 
