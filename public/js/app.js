@@ -17,6 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Module initialisieren
     // Die Module hängen sich selbst an ihre jeweiligen DOM-Elemente
     // und registrieren ihre Event-Listener.
+
+    if (window.StockMaster.HeaderModule && window.StockMaster.HeaderModule.init) {
+        window.StockMaster.HeaderModule.init();
+    }
     
     if (window.StockMaster.WatchlistModule && window.StockMaster.WatchlistModule.init) {
         window.StockMaster.WatchlistModule.init();

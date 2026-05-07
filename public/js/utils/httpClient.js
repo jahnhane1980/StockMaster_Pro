@@ -7,26 +7,16 @@ window.StockMaster = window.StockMaster || {};
 
 window.StockMaster.HttpClient = (function() {
     
-    let activeRequests = 0;
-
-    function updateLoader(isLoading) {
-        const loader = document.getElementById('top-loader');
-        if (!loader) return;
-
-        if (isLoading) {
-            activeRequests++;
-            loader.classList.add('active');
-        } else {
-            activeRequests--;
-            if (activeRequests <= 0) {
-                activeRequests = 0;
-                loader.classList.remove('active');
-            }
-        }
+    function notifyLoading(isLoading) {
+        const eventName = isLoading 
+            ? window.StockMaster.Events.DATA_LOADING_START 
+            : window.StockMaster.Events.DATA_LOADING_STOP;
+        
+        document.dispatchEvent(new CustomEvent(eventName));
     }
 
     async function request(endpoint, options = {}) {
-        updateLoader(true);
+        notifyLoading(true);
         const config = {
             method: options.method || 'GET',
             // Default-Header entfernt, da er bei GET-Requests und file:/// URLs CORS-Preflights auslöst
@@ -60,7 +50,7 @@ window.StockMaster.HttpClient = (function() {
             // Fehler weiterwerfen, falls der aufrufende Service noch lokal reagieren muss
             throw error; 
         } finally {
-            updateLoader(false);
+            notifyLoading(false);
         }
     }
 

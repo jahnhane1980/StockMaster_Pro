@@ -14,7 +14,11 @@ window.StockMaster.Events = {
     TICKER_SELECTED: 'watchlist:ticker-selected',
 
     // NEU: Damit das Intelligence Board den Chart triggern kann
-    CHART_DATA_READY: 'chart:data-ready' 
+    CHART_DATA_READY: 'chart:data-ready',
+
+    // NEU: Globales Loading System (Refactoring)
+    DATA_LOADING_START: 'data:loading-start',
+    DATA_LOADING_STOP: 'data:loading-stop'
 };
 
 // Schützt das Wörterbuch davor, zur Laufzeit verändert zu werden
