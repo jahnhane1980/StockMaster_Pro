@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 # Lokale Konfiguration mit sensiblen API-Keys ignorieren
 public/js/config.js
 server/.env 
+
+# Logger ignorieren
+server/logs/*

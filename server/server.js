@@ -22,6 +22,14 @@ app.use(express.json());
 // Statische Dateien aus /public bereitstellen
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Logger initialisieren
+const Logger = require('./utils/Logger');
+
+// Beispiel: Den Server-Start loggen
+app.listen(PORT, () => {
+    Logger.info(`🚀 StockMaster Pro läuft auf http://localhost:${PORT}`);
+});
+
 /**
  * API Endpunkte (Delegiert an Controller)
  */
