@@ -5,7 +5,7 @@ const requestManager = require('../services/RequestManager');
 class AlphaVantageRepo {
   constructor() {
     this.apiKey = process.env.ALPHAVANTAGE_API_KEY;
-    this.baseUrl = 'https://www.alphavantage.co/query';
+    this.baseUrl = process.env.ALPHAVANTAGE_BASE_URL || 'https://www.alphavantage.co/query';
     this.providerName = 'AV';
   }
 

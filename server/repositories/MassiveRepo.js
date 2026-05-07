@@ -5,8 +5,10 @@ const requestManager = require('../services/RequestManager');
 class MassiveRepo {
   constructor() {
     this.apiKey = process.env.MASSIVE_API_KEY;
+    // Sicherheitsprüfung für die Version (Fallback auf v1)
+    const apiVersion = process.env.MASSIVE_API_VERSION || 'v1';
     // Priorisiere MASSIVE_BASE_URL aus der .env, sonst Fallback auf Versionierung
-    this.baseUrl = process.env.MASSIVE_BASE_URL || `https://api.massive.com/${process.env.MASSIVE_API_VERSION || 'v3'}`; 
+    this.baseUrl = process.env.MASSIVE_BASE_URL || `https://api.massive.com/${apiVersion}`;
     this.providerName = 'MASSIVE';
   }
 
@@ -18,15 +20,13 @@ class MassiveRepo {
       const response = await axios.get(`${this.baseUrl}${endpoint}`, {
         params,
         headers: {
-          // Die genaue Auth-Methode hängt von den Massive-Docs ab, oft Bearer Token oder x-api-key Header
-          'Authorization': `Bearer ${this.apiKey}`, 
+          'Authorization': `Bearer ${this.apiKey}`,
           'Accept': 'application/json'
         }
       });
-      
+
       return response.data;
     } catch (error) {
-      // Spezielles Error-Handling für Massive, falls sie 429 werfen
       if (error.response && error.response.status === 429) {
         throw new Error('MASSIVE_LIMIT_REACHED');
       }
@@ -38,7 +38,6 @@ class MassiveRepo {
    * Holt den absoluten Echtzeit-Kurs für das Board (Höchste Prio: P1)
    */
   async getRealtimeQuote(ticker) {
-    // Endpunkt ist ein Platzhalter basierend auf typischen REST-Strukturen
     const task = () => this._fetchFromAPI(`/stocks/${ticker}/quote`);
 
     console.log(`[MassiveRepo] Queueing Realtime Quote for ${ticker} (P1)`);
