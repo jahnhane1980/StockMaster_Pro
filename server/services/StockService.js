@@ -6,6 +6,7 @@ const AnalysisService = require('./AnalysisService');
 const HistoricalDataDAO = require('../models/HistoricalDataDAO');
 const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
+const { ResourceNotFoundError } = require('../utils/Errors');
 
 /**
  * Zentraler Orchestrierungs-Service für Aktiendaten.

@@ -4,6 +4,7 @@ const TickerRepository = require('../repositories/TickerRepository');
 const StockService = require('../services/StockService');
 const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
+const { StockMasterError } = require('../utils/Errors');
 
 /**
  * Controller für die Verwaltung der Watchlist und des Intelligence Boards.
@@ -22,8 +23,14 @@ class WatchlistController {
   async addTickerToWatchlist(req, res) {
     const { symbol, name } = req.body;
 
-    if (!symbol) {
-      return res.status(400).json({ error: 'Symbol fehlt.' });
+    // Strikte Validierung (Regel 4 & 12)
+    const symbolRegex = /^[A-Za-z0-9]{1,10}$/;
+    if (!symbol || !symbolRegex.test(symbol)) {
+      Logger.warn(`[WatchlistController] Ungültiges Symbol abgelehnt: ${symbol}`);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ungültiges Symbol. Nur alphanumerische Zeichen (max. 10) erlaubt.' 
+      });
     }
 
     const ticker = symbol.toUpperCase();
@@ -70,11 +77,21 @@ class WatchlistController {
       return res.status(400).json({ error: 'Haupt-Ticker oder verknüpfter Ticker fehlt.' });
     }
 
+    // Score Validierung (Regel 4)
+    const numericScore = parseFloat(score);
+    if (isNaN(numericScore) || numericScore < -1 || numericScore > 1) {
+      Logger.warn(`[WatchlistController] Ungültiger Korrelations-Score: ${score}`);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Score muss eine Zahl zwischen -1 und 1 sein.' 
+      });
+    }
+
     try {
       IntelligenceDAO.upsertCorrelation(
         mainTicker.toUpperCase(), 
         linkedTicker.toUpperCase(), 
-        score || 0
+        numericScore
       );
 
       return res.status(200).json({ success: true });
@@ -100,15 +117,19 @@ class WatchlistController {
       const intelligenceData = await StockService.getIntelligenceData(ticker);
       return res.status(200).json(intelligenceData);
     } catch (error) {
-      if (error.message.includes('Limit Reached') || error.message.includes('429')) {
-        return res.status(429).json({ 
-          error: 'Provider Limit erreicht.', 
-          details: 'Daten können aktuell nicht vollständig geladen werden. Bitte später erneut versuchen.' 
+      Logger.error(`[WatchlistController] Fehler Board für ${ticker}: ${error.message}`);
+      
+      if (error instanceof StockMasterError) {
+        return res.status(error.statusCode).json({ 
+          success: false,
+          error: error.message 
         });
       }
       
-      Logger.error(`[WatchlistController] Fehler Board: ${error.message}`);
-      return res.status(500).json({ error: 'Interner Serverfehler beim Laden der Board-Daten.' });
+      return res.status(500).json({ 
+        success: false,
+        error: 'Interner Serverfehler beim Laden der Board-Daten.' 
+      });
     }
   }
 }

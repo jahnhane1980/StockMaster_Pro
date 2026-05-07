@@ -19,6 +19,8 @@ class RequestManager {
     };
 
     // Limits & Tracking
+    this.MAX_QUEUE_SIZE = 100;
+    this.MAX_RETRIES = 3;
     this.avDailyLimit = 25;
     this.avRequestsToday = 0; 
     this.avRequestsPerMinute = 5;
@@ -33,6 +35,7 @@ class RequestManager {
 
   /**
    * Fügt einen asynchronen Task der entsprechenden Warteschlange hinzu.
+   * Intent: Schutz vor Memory-Leaks durch Deckelung der Queue-Größe (Regel 12).
    * @param {string} priority - 'P1', 'P2' oder 'P3'.
    * @param {string} provider - 'AV' oder 'MASSIVE'.
    * @param {Function} taskFn - Die asynchrone Funktion (Promise), die den API-Call ausführt.
@@ -40,12 +43,19 @@ class RequestManager {
    */
   enqueue(priority, provider, taskFn) {
     return new Promise((resolve, reject) => {
+      // Memory-Schutz: Queue-Größe prüfen
+      if (this.queues[priority].length >= this.MAX_QUEUE_SIZE) {
+        Logger.error(`[RequestManager] Queue ${priority} voll (${this.MAX_QUEUE_SIZE}). Task verworfen.`);
+        return reject(new Error(`Queue ${priority} ist voll. Bitte später versuchen.`));
+      }
+
       this.queues[priority].push({
         priority, 
         provider,
         taskFn,
         resolve,
-        reject
+        reject,
+        retries: 0 // Initialer Retry-Zähler
       });
       
       this.processQueue();
@@ -54,7 +64,7 @@ class RequestManager {
 
   /**
    * Arbeitet die Warteschlangen unter Berücksichtigung der Priorität und Rate-Limits ab.
-   * Intent: P1 Tasks werden immer bevorzugt, außer ein Provider-Limit (AV) verhindert die Ausführung.
+   * Intent: P1 Tasks werden immer bevorzugt. Fehlerhafte Tasks werden bis zu 3x wiederholt (Regel 12).
    * @returns {Promise<void>}
    * @private
    */
@@ -105,10 +115,21 @@ class RequestManager {
       nextTask.resolve(result);
 
     } catch (error) {
-      if (error.message === 'AV_DAILY_LIMIT_REACHED') {
-         nextTask.reject({ status: 429, message: 'Provider Limit Reached for today.' });
+      // Retry-Logik (Regel 12)
+      if (nextTask.retries < this.MAX_RETRIES && error.message !== 'AV_DAILY_LIMIT_REACHED') {
+        nextTask.retries++;
+        Logger.warn(`[RequestManager] Task fehlgeschlagen (${nextTask.provider}). Retry ${nextTask.retries}/${this.MAX_RETRIES}. Fehler: ${error.message}`);
+        
+        // Zurück in die Queue (ans Ende der jeweiligen Priorität)
+        this.queues[nextTask.priority].push(nextTask);
       } else {
-         nextTask.reject(error);
+        // Finales Scheitern
+        if (error.message === 'AV_DAILY_LIMIT_REACHED') {
+          nextTask.reject({ status: 429, message: 'Provider Limit Reached for today.' });
+        } else {
+          Logger.error(`[RequestManager] Task endgültig fehlgeschlagen nach ${nextTask.retries} Retries: ${error.message}`);
+          nextTask.reject(error);
+        }
       }
     } finally {
       this.isProcessing = false;

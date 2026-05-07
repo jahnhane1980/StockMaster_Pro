@@ -1,4 +1,5 @@
 // server/services/AnalysisService.js
+const Logger = require('../utils/Logger');
 
 /**
  * Service für die statistische Analyse von Marktdaten.
@@ -21,6 +22,7 @@ class AnalysisService {
    */
   calculateCorrelation(history1, history2) {
     if (!history1 || !history2 || history1.length === 0 || history2.length === 0) {
+      Logger.warn('[AnalysisService] Korrelation abgebrochen: Unzureichende Daten (einer der Datensätze ist leer).');
       return { correlation: 0, quality: 'Unzureichende Daten', sampleSize: 0 };
     }
 
@@ -38,6 +40,7 @@ class AnalysisService {
 
     const n = alignedX.length;
     if (n < 5) { // Zu wenig Überlappung für eine sinnvolle Aussage
+      Logger.warn(`[AnalysisService] Korrelation unpräzise: Zu wenig Überlappung (n=${n}). Erwarte min. 5.`);
       return { correlation: 0, quality: 'Zu wenig Überlappung', sampleSize: n };
     }
 
@@ -58,10 +61,12 @@ class AnalysisService {
     }
 
     const denominator = Math.sqrt(sumSqX * sumSqY);
-    
+
     if (denominator === 0) {
+      Logger.warn('[AnalysisService] Korrelation nicht berechenbar: Keine Varianz in den Daten (Denominator=0).');
       return { correlation: 0, quality: 'Keine Varianz', sampleSize: n };
     }
+
 
     const correlation = numerator / denominator;
 

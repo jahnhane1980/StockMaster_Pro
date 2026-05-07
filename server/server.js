@@ -5,6 +5,9 @@
 require('dotenv').config(); 
 const express = require('express');
 const path = require('path');
+const helmet = require('helmet');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const { initDB } = require('./db/Database');
 const Logger = require('./utils/Logger');
 
@@ -22,6 +25,31 @@ const IntelligenceController = require('./controllers/IntelligenceController');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Security Middlewares
+app.use(helmet());
+app.use(cors({
+  origin: [`http://localhost:${PORT}`, 'http://127.0.0.1:' + PORT],
+  methods: ['GET', 'POST', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Rate Limiting für API-Routen (Regel 12)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 Minuten
+  max: 100, // Limit auf 100 Requests pro Fenster
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Zu viele Anfragen von dieser IP. Bitte versuchen Sie es in 15 Minuten erneut.'
+  },
+  handler: (req, res, next, options) => {
+    Logger.warn(`[RateLimit] Blockierter Request von IP: ${req.ip}`);
+    res.status(options.statusCode).send(options.message);
+  }
+});
+
+app.use('/api/', apiLimiter);
 app.use(express.json());
 
 /**

@@ -2,6 +2,7 @@
 const HistoricalDataDAO = require('../models/HistoricalDataDAO');
 const AnalysisService = require('../services/AnalysisService');
 const Logger = require('../utils/Logger');
+const { StockMasterError } = require('../utils/Errors');
 
 /**
  * Controller für komplexe Markt-Analysen und Intelligence-Abfragen.
@@ -18,7 +19,17 @@ class IntelligenceController {
    * Antwort-Schema: { symbol: string, timestamp: string, correlations: { btc: Object, gold: Object } }
    */
   async getMarketCorrelations(req, res) {
-    const symbol = req.params.symbol.toUpperCase();
+    const symbol = req.params.symbol ? req.params.symbol.toUpperCase() : null;
+
+    // Strikte Validierung (Regel 4 & 12)
+    const symbolRegex = /^[A-Za-z0-9]{1,10}$/;
+    if (!symbol || !symbolRegex.test(symbol)) {
+      Logger.warn(`[IntelligenceController] Ungültiges Symbol abgelehnt: ${symbol}`);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ungültiges Symbol. Nur alphanumerische Zeichen (max. 10) erlaubt.' 
+      });
+    }
 
     try {
       Logger.info(`[IntelligenceController] Berechne Markt-Korrelationen für: ${symbol}`);
@@ -59,7 +70,18 @@ class IntelligenceController {
 
     } catch (error) {
       Logger.error(`[IntelligenceController] Fehler bei Korrelations-Abfrage für ${symbol}: ${error.message}`);
-      return res.status(500).json({ error: 'Interner Serverfehler bei der Korrelations-Berechnung.' });
+      
+      if (error instanceof StockMasterError) {
+        return res.status(error.statusCode).json({ 
+          success: false,
+          error: error.message 
+        });
+      }
+
+      return res.status(500).json({ 
+        success: false,
+        error: 'Interner Serverfehler bei der Korrelations-Berechnung.' 
+      });
     }
   }
 }

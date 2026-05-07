@@ -2,6 +2,7 @@
 const axios = require('axios');
 const requestManager = require('../services/RequestManager');
 const Logger = require('../utils/Logger');
+const { ProviderLimitError, ResourceNotFoundError } = require('../utils/Errors');
 
 /**
  * Repository für den Zugriff auf die AlphaVantage API.
@@ -33,10 +34,16 @@ class AlphaVantageRepo {
     
     // Alpha Vantage gibt bei Limits oft 200 OK zurück, aber mit einer Info-Message
     if (response.data && response.data.Information && response.data.Information.includes('rate limit')) {
-      throw new Error('AV_DAILY_LIMIT_REACHED');
+      throw new ProviderLimitError('Alpha Vantage Daily Rate Limit erreicht.');
     }
+    
     if (response.data && response.data.Note && response.data.Note.includes('API call frequency')) {
-      throw new Error('AV_MINUTE_LIMIT_REACHED'); // Falls doch mal einer durchrutscht
+      throw new ProviderLimitError('Alpha Vantage Minute Rate Limit erreicht.');
+    }
+
+    // Fehlerprüfung für ungültige Symbole oder fehlende Daten (Regel 12)
+    if (response.data && (response.data['Error Message'] || (Object.keys(response.data).length === 0))) {
+      throw new ResourceNotFoundError(`Keine Daten bei Alpha Vantage für Parameter: ${urlParams.get('symbol') || urlParams.get('tickers')}`);
     }
 
     return response.data;
