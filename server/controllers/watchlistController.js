@@ -5,8 +5,9 @@ const StockService = require('../services/StockService');
 const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
+const MESSAGES = require('../utils/Messages');
 const { StockMasterError } = require('../utils/Errors');
-const { TECH } = require('../utils/AppConstants');
+const { TECH, CONFIG, RESPONSE_KEYS } = require('../utils/AppConstants');
 
 /**
  * Controller für die Verwaltung der Watchlist und des Intelligence Boards.
@@ -29,9 +30,9 @@ class WatchlistController {
     if (!symbol || !symbolRegex.test(symbol)) {
       Logger.warn(`[WatchlistController] Ungültiges Symbol abgelehnt: ${symbol}`);
       return res.status(HttpStatus.BAD_REQUEST).json({ 
-        success: false, 
-        data: null,
-        error: 'Ungültiges Symbol. Nur alphanumerische Zeichen (max. 10) erlaubt.' 
+        [RESPONSE_KEYS.SUCCESS]: false, 
+        [RESPONSE_KEYS.DATA]: null,
+        [RESPONSE_KEYS.ERROR]: MESSAGES.ERR_INVALID_SYMBOL 
       });
     }
 
@@ -54,16 +55,16 @@ class WatchlistController {
 
       // Antwort an das Frontend (Regel 13)
       return res.status(HttpStatus.OK).json({ 
-        success: true,
-        data: { message: `${ticker} zur Watchlist hinzugefügt. Daten werden im Hintergrund synchronisiert.` },
-        error: null
+        [RESPONSE_KEYS.SUCCESS]: true,
+        [RESPONSE_KEYS.DATA]: { message: `${ticker} zur Watchlist hinzugefügt. ${MESSAGES.MSG_SYNC_STARTED}` },
+        [RESPONSE_KEYS.ERROR]: null
       });
     } catch (err) {
       Logger.error(`[WatchlistController] Fehler beim Hinzufügen: ${err.message}`);
       return res.status(HttpStatus.SERVER_ERROR).json({ 
-        success: false, 
-        data: null, 
-        error: 'Interner Serverfehler beim Speichern des Tickers.' 
+        [RESPONSE_KEYS.SUCCESS]: false, 
+        [RESPONSE_KEYS.DATA]: null, 
+        [RESPONSE_KEYS.ERROR]: MESSAGES.ERR_SAVE_TICKER_FAILED 
       });
     }
   }
@@ -81,20 +82,20 @@ class WatchlistController {
 
     if (!mainTicker || !linkedTicker) {
       return res.status(HttpStatus.BAD_REQUEST).json({ 
-        success: false, 
-        data: null, 
-        error: 'Haupt-Ticker oder verknüpfter Ticker fehlt.' 
+        [RESPONSE_KEYS.SUCCESS]: false, 
+        [RESPONSE_KEYS.DATA]: null, 
+        [RESPONSE_KEYS.ERROR]: MESSAGES.ERR_MISSING_TICKERS 
       });
     }
 
     // Score Validierung (Regel 4)
     const numericScore = parseFloat(score);
-    if (isNaN(numericScore) || numericScore < -1 || numericScore > 1) {
+    if (isNaN(numericScore) || numericScore < CONFIG.SCORE_THRESHOLDS.NEGATIVE || numericScore > CONFIG.SCORE_THRESHOLDS.POSITIVE) {
       Logger.warn(`[WatchlistController] Ungültiger Korrelations-Score: ${score}`);
       return res.status(HttpStatus.BAD_REQUEST).json({ 
-        success: false, 
-        data: null,
-        error: 'Score muss eine Zahl zwischen -1 und 1 sein.' 
+        [RESPONSE_KEYS.SUCCESS]: false, 
+        [RESPONSE_KEYS.DATA]: null,
+        [RESPONSE_KEYS.ERROR]: MESSAGES.ERR_INVALID_SCORE 
       });
     }
 
@@ -106,16 +107,16 @@ class WatchlistController {
       );
 
       return res.status(HttpStatus.OK).json({ 
-        success: true, 
-        data: null, 
-        error: null 
+        [RESPONSE_KEYS.SUCCESS]: true, 
+        [RESPONSE_KEYS.DATA]: null, 
+        [RESPONSE_KEYS.ERROR]: null 
       });
     } catch (err) {
       Logger.error(`[WatchlistController] Fehler beim Erstellen der Korrelation: ${err.message}`);
       return res.status(HttpStatus.SERVER_ERROR).json({ 
-        success: false, 
-        data: null, 
-        error: 'Interner Serverfehler.' 
+        [RESPONSE_KEYS.SUCCESS]: false, 
+        [RESPONSE_KEYS.DATA]: null, 
+        [RESPONSE_KEYS.ERROR]: MESSAGES.ERR_INTERNAL_SERVER 
       });
     }
   }
@@ -135,25 +136,25 @@ class WatchlistController {
       // StockService aggregiert Daten von verschiedenen Providern und aus der DB.
       const intelligenceData = await StockService.getIntelligenceData(ticker);
       return res.status(HttpStatus.OK).json({
-        success: true,
-        data: intelligenceData,
-        error: null
+        [RESPONSE_KEYS.SUCCESS]: true,
+        [RESPONSE_KEYS.DATA]: intelligenceData,
+        [RESPONSE_KEYS.ERROR]: null
       });
     } catch (error) {
       Logger.error(`[WatchlistController] Fehler Board für ${ticker}: ${error.message}`);
       
       if (error instanceof StockMasterError) {
         return res.status(error.statusCode).json({ 
-          success: false,
-          data: null,
-          error: error.message 
+          [RESPONSE_KEYS.SUCCESS]: false,
+          [RESPONSE_KEYS.DATA]: null,
+          [RESPONSE_KEYS.ERROR]: error.message 
         });
       }
       
       return res.status(HttpStatus.SERVER_ERROR).json({ 
-        success: false,
-        data: null,
-        error: 'Interner Serverfehler beim Laden der Board-Daten.' 
+        [RESPONSE_KEYS.SUCCESS]: false, 
+        [RESPONSE_KEYS.DATA]: null, 
+        [RESPONSE_KEYS.ERROR]: MESSAGES.ERR_BOARD_LOAD_FAILED 
       });
     }
   }

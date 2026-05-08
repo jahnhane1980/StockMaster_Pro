@@ -19,18 +19,18 @@ const CONFIG = Object.freeze({
 /**
  * Zentraler Manager für alle ausgehenden API-Anfragen an externe Provider.
  * Intent: Um Provider-Limits (z. B. AlphaVantage 5 Req/Min) strikt einzuhalten, 
- * implementiert dieser Service ein prioritätsbasiertes Queue-System (P1-P3). 
+ * implementiert dieser Service ein prioritätsbasiertes Queue-System (PRIORITY.CRITICAL bis PRIORITY.BACKGROUND). 
  * Durch das asynchrone Queue-Modell und Zeitabstände (setImmediate/setTimeout) wird sichergestellt, 
- * dass kritische Real-Time-Daten (P1) bevorzugt behandelt werden, während Hintergrund-Tasks 
+ * dass kritische Real-Time-Daten (PRIORITY.CRITICAL) bevorzugt behandelt werden, während Hintergrund-Tasks 
  * (Sentiment/History) gedrosselt abgearbeitet werden.
  */
 class RequestManager {
   constructor() {
     /** @type {Object<string, Array<Object>>} Warteschlangen nach Priorität */
     this.queues = {
-      [PRIORITY.CRITICAL]: [],   // Kritisch (Real-Time, Massive)
-      [PRIORITY.IMPORTANT]: [],  // Wichtig (History, AV)
-      [PRIORITY.BACKGROUND]: []  // Hintergrund (Sentiment, Fundamentals, AV)
+      [PRIORITY.CRITICAL]: [],   // Kritisch (Real-Time, PROVIDER.MASSIVE)
+      [PRIORITY.IMPORTANT]: [],  // Wichtig (History, PROVIDER.ALPHA_VANTAGE)
+      [PRIORITY.BACKGROUND]: []  // Hintergrund (Sentiment, Fundamentals, PROVIDER.ALPHA_VANTAGE)
     };
 
     // Limits & Tracking
@@ -49,8 +49,8 @@ class RequestManager {
   /**
    * Fügt einen asynchronen Task der entsprechenden Warteschlange hinzu.
    * Intent: Schutz vor Memory-Leaks durch Deckelung der Queue-Größe (Regel 12).
-   * @param {string} priority - 'P1', 'P2' oder 'P3'.
-   * @param {string} provider - 'AV' oder 'MASSIVE'.
+   * @param {string} priority - Priorität aus AppConstants.PRIORITY.
+   * @param {string} provider - Provider aus AppConstants.PROVIDER.
    * @param {Function} taskFn - Die asynchrone Funktion (Promise), die den API-Call ausführt.
    * @returns {Promise<any>} - Versprechen, das mit dem API-Ergebnis aufgelöst wird.
    */
@@ -77,7 +77,7 @@ class RequestManager {
 
   /**
    * Arbeitet die Warteschlangen unter Berücksichtigung der Priorität und Rate-Limits ab.
-   * Intent: P1 Tasks werden immer bevorzugt. Fehlerhafte Tasks werden bis zu 3x wiederholt (Regel 12).
+   * Intent: PRIORITY.CRITICAL Tasks werden immer bevorzugt. Fehlerhafte Tasks werden bis zu 3x wiederholt (Regel 12).
    * @returns {Promise<void>}
    * @private
    */
@@ -88,13 +88,13 @@ class RequestManager {
     let nextTask = null;
     let queueUsed = null;
 
-    // Prioritäten: P1 > P2 > P3
+    // Prioritäten: PRIORITY.CRITICAL > PRIORITY.IMPORTANT > PRIORITY.BACKGROUND
     for (const p of [PRIORITY.CRITICAL, PRIORITY.IMPORTANT, PRIORITY.BACKGROUND]) {
       if (this.queues[p].length > 0) {
-        // Sonderlogik für AV: Prüfen, ob wir überhaupt einen AV-Slot frei haben
+        // Sonderlogik für PROVIDER.ALPHA_VANTAGE: Prüfen, ob wir überhaupt einen Slot frei haben
         const isAVSlotAvailable = (this.avRequestsToday < this.avDailyLimit) && (this.avRequestsThisMinute < this.avRequestsPerMinute);
         
-        // Finde den ersten Task in der Queue, der kein AV ist ODER falls AV-Slot frei ist
+        // Finde den ersten Task in der Queue, der kein PROVIDER.ALPHA_VANTAGE ist ODER falls Slot frei ist
         const taskIndex = this.queues[p].findIndex(t => t.provider !== PROVIDER.ALPHA_VANTAGE || isAVSlotAvailable);
         
         if (taskIndex !== -1) {
@@ -106,7 +106,7 @@ class RequestManager {
     }
 
     if (!nextTask) {
-      // Falls wir nur noch AV Tasks haben, aber im Limit sind, warten wir kurz (1 Sek)
+      // Falls wir nur noch PROVIDER.ALPHA_VANTAGE Tasks haben, aber im Limit sind, warten wir kurz (1 Sek)
       const hasAVTasks = this.queues[PRIORITY.CRITICAL].length > 0 || 
                          this.queues[PRIORITY.IMPORTANT].length > 0 || 
                          this.queues[PRIORITY.BACKGROUND].length > 0;
@@ -119,7 +119,7 @@ class RequestManager {
     this.isProcessing = true;
 
     try {
-      // Tracking für AV
+      // Tracking für PROVIDER.ALPHA_VANTAGE
       if (nextTask.provider === PROVIDER.ALPHA_VANTAGE) {
         this.avRequestsToday++;
         this.avRequestsThisMinute++;

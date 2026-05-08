@@ -3,7 +3,9 @@ const HistoricalDataDAO = require('../models/HistoricalDataDAO');
 const AnalysisService = require('../services/AnalysisService');
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
+const MESSAGES = require('../utils/Messages');
 const { StockMasterError } = require('../utils/Errors');
+const { CONFIG, RESPONSE_KEYS } = require('../utils/AppConstants');
 
 /**
  * Controller für komplexe Markt-Analysen und Intelligence-Abfragen.
@@ -26,9 +28,9 @@ class IntelligenceController {
     if (!symbol || !symbolRegex.test(symbol)) {
       Logger.warn(`[IntelligenceController] Ungültiges Symbol abgelehnt: ${symbol}`);
       return res.status(HttpStatus.BAD_REQUEST).json({ 
-        success: false, 
-        data: null,
-        error: 'Ungültiges Symbol. Nur alphanumerische Zeichen (max. 10) erlaubt.' 
+        [RESPONSE_KEYS.SUCCESS]: false, 
+        [RESPONSE_KEYS.DATA]: null,
+        [RESPONSE_KEYS.ERROR]: MESSAGES.ERR_INVALID_SYMBOL 
       });
     }
 
@@ -40,24 +42,24 @@ class IntelligenceController {
       const btcHistory = await HistoricalDataDAO.getHistoryForChart('BTC');
       const goldHistory = await HistoricalDataDAO.getHistoryForChart('GOLD');
 
-      if (!mainHistory || mainHistory.length < 10) {
+      if (!mainHistory || mainHistory.length < CONFIG.MIN_HISTORY_POINTS) {
         return res.status(HttpStatus.BAD_REQUEST).json({ 
-          success: false,
-          data: { symbol: symbol },
-          error: 'Unzureichende historische Daten für das Haupt-Symbol.'
+          [RESPONSE_KEYS.SUCCESS]: false,
+          [RESPONSE_KEYS.DATA]: { symbol: symbol },
+          [RESPONSE_KEYS.ERROR]: MESSAGES.ERR_INSUFFICIENT_DATA
         });
       }
 
       // 2. Korrelationen berechnen: Pearson-Algorithmus via AnalysisService
       const correlations = {};
 
-      if (btcHistory && btcHistory.length >= 10) {
+      if (btcHistory && btcHistory.length >= CONFIG.MIN_HISTORY_POINTS) {
         correlations.btc = AnalysisService.calculateCorrelation(mainHistory, btcHistory);
       } else {
         correlations.btc = { correlation: 0, quality: 'Keine BTC-Referenzdaten' };
       }
 
-      if (goldHistory && goldHistory.length >= 10) {
+      if (goldHistory && goldHistory.length >= CONFIG.MIN_HISTORY_POINTS) {
         correlations.gold = AnalysisService.calculateCorrelation(mainHistory, goldHistory);
       } else {
         correlations.gold = { correlation: 0, quality: 'Keine Gold-Referenzdaten' };
@@ -65,13 +67,13 @@ class IntelligenceController {
 
       // 3. Antwort senden (Regel 13)
       return res.status(HttpStatus.OK).json({
-        success: true,
-        data: {
+        [RESPONSE_KEYS.SUCCESS]: true,
+        [RESPONSE_KEYS.DATA]: {
           symbol: symbol,
           timestamp: new Date().toISOString(),
           correlations: correlations
         },
-        error: null
+        [RESPONSE_KEYS.ERROR]: null
       });
 
     } catch (error) {
@@ -79,16 +81,16 @@ class IntelligenceController {
       
       if (error instanceof StockMasterError) {
         return res.status(error.statusCode).json({ 
-          success: false,
-          data: null,
-          error: error.message 
+          [RESPONSE_KEYS.SUCCESS]: false,
+          [RESPONSE_KEYS.DATA]: null,
+          [RESPONSE_KEYS.ERROR]: error.message 
         });
       }
 
       return res.status(HttpStatus.SERVER_ERROR).json({ 
-        success: false,
-        data: null,
-        error: 'Interner Serverfehler bei der Korrelations-Berechnung.' 
+        [RESPONSE_KEYS.SUCCESS]: false,
+        [RESPONSE_KEYS.DATA]: null,
+        [RESPONSE_KEYS.ERROR]: MESSAGES.ERR_CORRELATION_FAILED 
       });
     }
   }

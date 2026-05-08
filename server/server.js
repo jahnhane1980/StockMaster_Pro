@@ -10,6 +10,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { initDB } = require('./db/Database');
 const Logger = require('./utils/Logger');
+const { PRIORITY, PROVIDER } = require('./utils/AppConstants');
 
 // Repositories
 const TickerRepository = require('./repositories/TickerRepository');
@@ -81,7 +82,7 @@ app.get('/api/intelligence/:ticker', (req, res) => WatchlistController.getIntell
 app.get('/api/intelligence/correlations/:symbol', (req, res) => IntelligenceController.getMarketCorrelations(req, res));
 
 /**
- * Direkter Abruf von Fundamentaldaten (AV - Prio P3).
+ * Direkter Abruf von Fundamentaldaten (AV - Prio PRIORITY.BACKGROUND).
  * @param {Object} req - Request-Objekt.
  * @param {Object} res - Response-Objekt.
  * @returns {JSON} - Die Fundamentaldaten oder Fehlermeldung.
@@ -89,7 +90,7 @@ app.get('/api/intelligence/correlations/:symbol', (req, res) => IntelligenceCont
 app.get('/api/fundamentals/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     try {
-        const data = await RequestManager.enqueue("P3", "AV", () => RepoFactory.getAlphaVantageRepo().getCompanyOverview(symbol));
+        const data = await RequestManager.enqueue(PRIORITY.BACKGROUND, PROVIDER.ALPHA_VANTAGE, () => RepoFactory.getAlphaVantageRepo().getCompanyOverview(symbol));
         res.json({ success: true, data, error: null });
     } catch (err) {
         Logger.error(`[Server] Fehler bei Fundamentaldaten-Abruf für ${symbol}: ${err.message}`);

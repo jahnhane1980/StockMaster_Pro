@@ -14,8 +14,54 @@ const PROVIDER = Object.freeze({
 });
 
 const API = Object.freeze({
-  AV_BASE_URL: 'https://www.alphavantage.co/query',
-  MASSIVE_V1: 'v1'
+  // Provider-Konfigurationen (Regel 18.2)
+  ALPHA_VANTAGE: {
+    BASE_URL: 'https://www.alphavantage.co/query'
+  },
+  MASSIVE: {
+    BASE_URL: 'https://api.massive.com/v3'
+  },
+  FINNHUB: {
+    BASE_URL: 'https://finnhub.io/api/v1'
+  },
+  FMP: {
+    BASE_URL: 'https://financialmodelingprep.com/api/v3'
+  },
+  
+  // AlphaVantage API Funktionen (Regel 17.2)
+  AV_FUNCTIONS: {
+    GLOBAL_QUOTE: 'GLOBAL_QUOTE',
+    DAILY_ADJUSTED: 'TIME_SERIES_DAILY_ADJUSTED',
+    SENTIMENT: 'NEWS_SENTIMENT',
+    OVERVIEW: 'OVERVIEW',
+    OBV: 'OBV'
+  },
+
+  // AlphaVantage Parameter
+  AV_PARAMS: {
+    FULL: 'full',
+    DAILY: 'daily'
+  },
+
+  // AlphaVantage Response Keys (Verschachtelte API-Strukturen)
+  AV_RESPONSE_KEYS: {
+    GLOBAL_QUOTE: 'Global Quote',
+    TIME_SERIES_DAILY: 'Time Series (Daily)',
+    TECHNICAL_OBV: 'Technical Analysis: OBV',
+    SYMBOL: '01. symbol',
+    OPEN: '02. open',
+    PRICE: '05. price',
+    VOLUME: '06. volume',
+    LATEST_DAY: '07. latest trading day',
+    CHANGE: '09. change',
+    CHANGE_PERCENT: '10. change percent'
+  },
+
+  // Massive API Parameter
+  MASSIVE_PARAMS: {
+    INTERVAL_5M: '5m',
+    INTERVAL_1D: '1d'
+  }
 });
 
 const INTERNAL_ERR = Object.freeze({
@@ -27,12 +73,29 @@ const TECH = Object.freeze({
   TYPE_STOCK: 'stock',
   TYPE_STOCK_UPPER: 'STOCK',
   FULFILLED: 'fulfilled',
-  EMPTY_STRING: ''
+  EMPTY_STRING: '',
+  MIME_JSON: 'application/json'
 });
 
 const LOG = Object.freeze({
   DEFAULT_DIR: 'server/logs',
   DEFAULT_LEVEL: 'info'
+});
+
+const CONFIG = Object.freeze({
+  MIN_HISTORY_POINTS: 10,
+  SCORE_THRESHOLDS: {
+    NEGATIVE: -1,
+    POSITIVE: 1
+  },
+  DB_VERSION: 2,
+  CACHE_DURATION_MS: 2592000000 // 30 Tage
+});
+
+const RESPONSE_KEYS = Object.freeze({
+  SUCCESS: 'success',
+  DATA: 'data',
+  ERROR: 'error'
 });
 
 module.exports = {
@@ -41,5 +104,7 @@ module.exports = {
   API,
   INTERNAL_ERR,
   TECH,
-  LOG
+  LOG,
+  CONFIG,
+  RESPONSE_KEYS
 };

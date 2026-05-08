@@ -12,12 +12,12 @@ const { PRIORITY, PROVIDER, API } = require('../utils/AppConstants');
  * Repository für den Zugriff auf die AlphaVantage API.
  * Intent: Da AlphaVantage im Free-Tier strikte Limits hat (5 Requests/Min, 500/Tag), 
  * werden alle Anfragen über den RequestManager geschleust. Dieser sorgt für die 
- * Einhaltung der Zeitabstände und priorisiert wichtige Daten (History) vor Hintergrund-Daten (Sentiment).
+ * Einhaltung der Zeitabstände und priorisiert wichtige Daten (PRIORITY.IMPORTANT) vor Hintergrund-Daten (PRIORITY.BACKGROUND).
  */
 class AlphaVantageRepo {
   constructor() {
     this.apiKey = process.env.ALPHAVANTAGE_API_KEY;
-    this.baseUrl = process.env.ALPHAVANTAGE_BASE_URL || API.AV_BASE_URL;
+    this.baseUrl = API.ALPHA_VANTAGE.BASE_URL;
     this.providerName = PROVIDER.ALPHA_VANTAGE;
   }
 
@@ -59,26 +59,26 @@ class AlphaVantageRepo {
   }
 
   /**
-   * Holt den aktuellen Kurs via GLOBAL_QUOTE (Prio: P1/P2).
+   * Holt den aktuellen Kurs via GLOBAL_QUOTE (Prio: PRIORITY.CRITICAL/PRIORITY.IMPORTANT).
    * @param {string} ticker - Das Aktiensymbol.
    * @returns {Promise<Object|null>} - Das harmonisierte Kurs-Objekt.
    */
   async getRealtimeQuote(ticker) {
     const task = async () => {
       const rawData = await this._fetchFromAPI({
-        function: 'GLOBAL_QUOTE',
+        function: API.AV_FUNCTIONS.GLOBAL_QUOTE,
         symbol: ticker
       });
-      const quote = rawData['Global Quote'];
+      const quote = rawData[API.AV_RESPONSE_KEYS.GLOBAL_QUOTE];
       if (!quote || Object.keys(quote).length === 0) return null;
 
       // Nutzt den zentralen Mapper (Regel 1)
       return MarketDataMapper.toQuote(
-        quote['01. symbol'],
-        quote['05. price'],
-        quote['02. open'],
-        quote['06. volume'],
-        quote['07. latest trading day']
+        quote[API.AV_RESPONSE_KEYS.SYMBOL],
+        quote[API.AV_RESPONSE_KEYS.PRICE],
+        quote[API.AV_RESPONSE_KEYS.OPEN],
+        quote[API.AV_RESPONSE_KEYS.VOLUME],
+        quote[API.AV_RESPONSE_KEYS.LATEST_DAY]
       );
     };
 
@@ -87,7 +87,7 @@ class AlphaVantageRepo {
   }
 
   /**
-   * Holt historische Tagesdaten (Wichtig für neue Ticker -> Prio: P2).
+   * Holt historische Tagesdaten (Wichtig für neue Ticker -> Prio: PRIORITY.IMPORTANT).
    * Gibt nun eine Liste harmonisierter Modelle zurück.
    * @param {string} ticker - Das Aktiensymbol.
    * @returns {Promise<Array<Object>>} - Die harmonisierten Zeitreihendaten.
@@ -95,12 +95,12 @@ class AlphaVantageRepo {
   async getDailyHistory(ticker) {
     const task = async () => {
       const rawData = await this._fetchFromAPI({
-        function: 'TIME_SERIES_DAILY_ADJUSTED',
+        function: API.AV_FUNCTIONS.DAILY_ADJUSTED,
         symbol: ticker,
-        outputsize: 'full'
+        outputsize: API.AV_PARAMS.FULL
       });
 
-      const timeSeries = rawData['Time Series (Daily)'];
+      const timeSeries = rawData[API.AV_RESPONSE_KEYS.TIME_SERIES_DAILY];
       if (!timeSeries) return [];
 
       return Object.keys(timeSeries).map(date => {
@@ -123,14 +123,14 @@ class AlphaVantageRepo {
   }
 
   /**
-   * Holt das News Sentiment (Hintergrund-Task -> Prio: P3).
+   * Holt das News Sentiment (Hintergrund-Task -> Prio: PRIORITY.BACKGROUND).
    * @param {string} ticker - Das Aktiensymbol.
    * @returns {Promise<Object|null>} - Harmonisiertes Sentiment-Modell.
    */
   async getNewsSentiment(ticker) {
     const task = async () => {
       const rawData = await this._fetchFromAPI({
-        function: 'NEWS_SENTIMENT',
+        function: API.AV_FUNCTIONS.SENTIMENT,
         tickers: ticker,
         limit: 50
       });
@@ -158,14 +158,14 @@ class AlphaVantageRepo {
   }
 
   /**
-   * Holt Fundamentaldaten: Company Overview (Hintergrund-Task -> Prio: P3).
+   * Holt Fundamentaldaten: Company Overview (Hintergrund-Task -> Prio: PRIORITY.BACKGROUND).
    * @param {string} ticker - Das Aktiensymbol.
    * @returns {Promise<Object|null>} - Harmonisiertes Metadaten-Modell.
    */
   async getFundamentalsOverview(ticker) {
     const task = async () => {
       const rawData = await this._fetchFromAPI({
-        function: 'OVERVIEW',
+        function: API.AV_FUNCTIONS.OVERVIEW,
         symbol: ticker
       });
 
@@ -194,20 +194,20 @@ class AlphaVantageRepo {
   }
 
   /**
-   * Holt technische Indikatoren: On-Balance Volume (Hintergrund -> Prio: P3).
+   * Holt technische Indikatoren: On-Balance Volume (Hintergrund -> Prio: PRIORITY.BACKGROUND).
    * @param {string} ticker - Das Aktiensymbol.
-   * @param {string} [interval='daily'] - Zeitintervall.
+   * @param {string} [interval=API.AV_PARAMS.DAILY] - Zeitintervall.
    * @returns {Promise<Object|null>} - Harmonisierte OBV-Zeitreihe.
    */
-  async getOBV(ticker, interval = 'daily') {
+  async getOBV(ticker, interval = API.AV_PARAMS.DAILY) {
     const task = async () => {
       const rawData = await this._fetchFromAPI({
-        function: 'OBV',
+        function: API.AV_FUNCTIONS.OBV,
         symbol: ticker,
         interval: interval
       });
 
-      const data = rawData['Technical Analysis: OBV'] || {};
+      const data = rawData[API.AV_RESPONSE_KEYS.TECHNICAL_OBV] || {};
       const obvList = Object.keys(data).slice(0, 30).map(date => ({
         date,
         value: parseFloat(data[date]['OBV'])

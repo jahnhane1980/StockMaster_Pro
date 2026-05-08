@@ -4,19 +4,16 @@ const requestManager = require('../services/RequestManager');
 const MarketDataMapper = require('../utils/MarketDataMapper');
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
-const { PRIORITY, PROVIDER, API, INTERNAL_ERR } = require('../utils/AppConstants');
+const { PRIORITY, PROVIDER, API, INTERNAL_ERR, TECH } = require('../utils/AppConstants');
 
 /**
  * Repository für den Zugriff auf die Massive API (Hochverfügbare Marktdaten).
- * Wird primär für Echtzeit-Kurse und Intraday-Daten mit hoher Priorität (P1) genutzt.
+ * Wird primär für Echtzeit-Kurse und Intraday-Daten mit hoher Priorität (PRIORITY.CRITICAL) genutzt.
  */
 class MassiveRepo {
   constructor() {
     this.apiKey = process.env.MASSIVE_API_KEY;
-    // Sicherheitsprüfung für die Version (Fallback auf v1)
-    const apiVersion = process.env.MASSIVE_API_VERSION || API.MASSIVE_V1;
-    // Priorisiere MASSIVE_BASE_URL aus der .env, sonst Fallback auf Versionierung
-    this.baseUrl = process.env.MASSIVE_BASE_URL || `https://api.massive.com/${apiVersion}`;
+    this.baseUrl = API.MASSIVE.BASE_URL;
     this.providerName = PROVIDER.MASSIVE;
   }
 
@@ -33,7 +30,7 @@ class MassiveRepo {
         params,
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
-          'Accept': 'application/json'
+          'Accept': TECH.MIME_JSON
         }
       });
 
@@ -47,7 +44,7 @@ class MassiveRepo {
   }
 
   /**
-   * Holt den absoluten Echtzeit-Kurs für das Board (Höchste Prio: P1).
+   * Holt den absoluten Echtzeit-Kurs für das Board (Höchste Prio: PRIORITY.CRITICAL).
    * Nutzt nun den Aggregat-Endpunkt für den letzten Handelstag (Regel 15).
    * @param {string} ticker - Das Aktiensymbol.
    * @returns {Promise<Object|null>} - Das harmonisierte Kurs-Objekt.
@@ -68,13 +65,13 @@ class MassiveRepo {
   }
 
   /**
-   * Holt Intraday-Daten (z.B. für VWAP Berechnung im Intelligence Board) (Prio: P1).
+   * Holt Intraday-Daten (z.B. für VWAP Berechnung im Intelligence Board) (Prio: PRIORITY.CRITICAL).
    * @param {string} ticker - Das Aktiensymbol.
    * @returns {Promise<Object|null>} - Die Intraday-Zeitreihe.
    */
   async getIntradayData(ticker) {
     const task = () => this._fetchFromAPI(`/stocks/${ticker}/intraday`, {
-      interval: '5m' // 5-Minuten Kerzen für den heutigen Tag
+      interval: API.MASSIVE_PARAMS.INTERVAL_5M // 5-Minuten Kerzen für den heutigen Tag
     });
 
     Logger.info(`[MassiveRepo] Queueing Intraday Data for ${ticker} (${PRIORITY.CRITICAL})`);
@@ -82,7 +79,7 @@ class MassiveRepo {
   }
 
   /**
-   * Holt historische Tagesdaten für einen bestimmten Zeitraum (Prio: P1).
+   * Holt historische Tagesdaten für einen bestimmten Zeitraum (Prio: PRIORITY.CRITICAL).
    * Wird genutzt, um die Lücke zwischen dem letzten DB-Eintrag und heute zu füllen.
    * @param {string} ticker - Das Aktiensymbol.
    * @param {string} fromDate - Startdatum (YYYY-MM-DD).
@@ -93,7 +90,7 @@ class MassiveRepo {
     const task = () => this._fetchFromAPI(`/stocks/${ticker}/history`, {
       from: fromDate,
       to: toDate,
-      interval: '1d'
+      interval: API.MASSIVE_PARAMS.INTERVAL_1D
     });
 
     Logger.info(`[MassiveRepo] Queueing History Diff for ${ticker} (${fromDate} to ${toDate}) (${PRIORITY.CRITICAL})`);
