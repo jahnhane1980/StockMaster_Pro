@@ -112,7 +112,7 @@ class StockService {
         quote,
         history,
         fundamentals,
-        technicals: { obv: obvData }
+        indicators: { obv: obvData }
       };
 
     } catch (error) {
