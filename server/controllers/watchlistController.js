@@ -55,7 +55,7 @@ class WatchlistController {
       // Antwort an das Frontend (Regel 13)
       return res.status(HttpStatus.OK).json({ 
         [RESPONSE_KEYS.SUCCESS]: true,
-        [RESPONSE_KEYS.DATA]: { message: `${ticker} zur Watchlist hinzugefügt. ${MESSAGES.MSG_SYNC_STARTED}` },
+        [RESPONSE_KEYS.DATA]: { message: `${ticker} ${MESSAGES.MSG_TICKER_ADDED} ${MESSAGES.MSG_SYNC_STARTED}` },
         [RESPONSE_KEYS.ERROR]: null
       });
     } catch (err) {

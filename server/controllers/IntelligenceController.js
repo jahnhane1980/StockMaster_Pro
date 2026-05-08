@@ -55,13 +55,13 @@ class IntelligenceController {
       if (btcHistory && btcHistory.length >= CONFIG.MIN_HISTORY_POINTS) {
         correlations.btc = AnalysisService.calculateCorrelation(mainHistory, btcHistory);
       } else {
-        correlations.btc = { correlation: 0, quality: 'Keine BTC-Referenzdaten' };
+        correlations.btc = { correlation: 0, quality: MESSAGES.MSG_QUALITY_NO_BTC };
       }
 
       if (goldHistory && goldHistory.length >= CONFIG.MIN_HISTORY_POINTS) {
         correlations.gold = AnalysisService.calculateCorrelation(mainHistory, goldHistory);
       } else {
-        correlations.gold = { correlation: 0, quality: 'Keine Gold-Referenzdaten' };
+        correlations.gold = { correlation: 0, quality: MESSAGES.MSG_QUALITY_NO_GOLD };
       }
 
       // 3. Antwort senden (Regel 13)

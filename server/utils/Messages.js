@@ -27,8 +27,11 @@ const MESSAGES = Object.freeze({
   ERR_SAVE_TICKER_FAILED: 'Interner Serverfehler beim Speichern des Tickers.',
   ERR_BOARD_LOAD_FAILED: 'Interner Serverfehler beim Laden der Board-Daten.',
   
-  // Success Messages
+  // Success & Info Messages
   MSG_SYNC_STARTED: 'Daten werden im Hintergrund synchronisiert.',
+  MSG_TICKER_ADDED: 'zur Watchlist hinzugefügt.',
+  MSG_QUALITY_NO_BTC: 'Keine BTC-Referenzdaten',
+  MSG_QUALITY_NO_GOLD: 'Keine Gold-Referenzdaten',
   UI_NO_NEWS: 'Keine News'
 });
 
