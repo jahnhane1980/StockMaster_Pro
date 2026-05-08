@@ -3,7 +3,7 @@ const axios = require('axios');
 const requestManager = require('../services/RequestManager');
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
-const { PRIORITY, PROVIDER } = require('../utils/AppConstants');
+const { PRIORITY, PROVIDER, API, INTERNAL_ERR } = require('../utils/AppConstants');
 
 /**
  * Repository für den Zugriff auf die Massive API (Hochverfügbare Marktdaten).
@@ -13,7 +13,7 @@ class MassiveRepo {
   constructor() {
     this.apiKey = process.env.MASSIVE_API_KEY;
     // Sicherheitsprüfung für die Version (Fallback auf v1)
-    const apiVersion = process.env.MASSIVE_API_VERSION || 'v1';
+    const apiVersion = process.env.MASSIVE_API_VERSION || API.MASSIVE_V1;
     // Priorisiere MASSIVE_BASE_URL aus der .env, sonst Fallback auf Versionierung
     this.baseUrl = process.env.MASSIVE_BASE_URL || `https://api.massive.com/${apiVersion}`;
     this.providerName = PROVIDER.MASSIVE;
@@ -39,7 +39,7 @@ class MassiveRepo {
       return response.data;
     } catch (error) {
       if (error.response && error.response.status === HttpStatus.TOO_MANY_REQUESTS) {
-        throw new Error('MASSIVE_LIMIT_REACHED');
+        throw new Error(INTERNAL_ERR.MASSIVE_LIMIT);
       }
       throw error;
     }

@@ -1,11 +1,13 @@
-const { db } = require('../db/Database');
+// server/repositories/TickerRepository.js
 const RequestManager = require('../services/RequestManager');
 const MassiveRepo = require('./MassiveRepo');
+const WatchlistDAO = require('../models/WatchlistDAO');
+const { PRIORITY, PROVIDER } = require('../utils/AppConstants');
 
 /**
  * Repository für die Verwaltung der Ticker-Stammdaten und Preisabfragen.
  * Intent: Implementiert eine hybride Datenstrategie. Lesezugriffe (getAllTickers) 
- * erfolgen direkt gegen den lokalen SQLite-Cache für maximale Performance. 
+ * erfolgen direkt gegen den lokalen SQLite-Cache via WatchlistDAO. 
  * Schreibvorgänge (upsert) synchronisieren den lokalen Zustand. 
  * Externe API-Anfragen (getRealtimePrice) werden über den RequestManager delegiert.
  */
@@ -15,8 +17,7 @@ const TickerRepository = {
      * @returns {Array<Object>} - Liste aller Ticker inklusive geparster linked_assets.
      */
     getAllTickers: () => {
-        const stmt = db.prepare('SELECT * FROM tickers ORDER BY symbol ASC');
-        const rows = stmt.all();
+        const rows = WatchlistDAO.findAll();
         return rows.map(row => ({
             ...row,
             linked_assets: row.linked_assets ? JSON.parse(row.linked_assets) : []
@@ -29,48 +30,25 @@ const TickerRepository = {
      * @returns {Promise<Object|null>} - Das aktuelle Preis-Objekt von Massive.
      */
     async getRealtimePrice(symbol) {
-        return RequestManager.enqueue('P1', 'MASSIVE', () => MassiveRepo.getRealtimeQuote(symbol));
+        return RequestManager.enqueue(PRIORITY.CRITICAL, PROVIDER.MASSIVE, () => MassiveRepo.getRealtimeQuote(symbol));
     },
 
     /**
      * Erstellt einen neuen Ticker oder aktualisiert einen bestehenden.
      * @param {Object} ticker - Das Ticker-Objekt mit allen Stammdaten.
-     * @returns {Object} - Das Ergebnis des SQLite-Statements (changes, lastInsertRowid).
+     * @returns {Object} - Das Ergebnis der DAO-Operation.
      */
     upsertTicker: (ticker) => {
-        // Wir definieren das Statement einmal
-        const stmt = db.prepare(`
-            INSERT INTO tickers (symbol, name, type, sector, industry, linked_assets, last_updated)
-            VALUES (@symbol, @name, @type, @sector, @industry, @linked_assets, @last_updated)
-            ON CONFLICT(symbol) DO UPDATE SET
-                name=excluded.name,
-                type=excluded.type,
-                sector=excluded.sector,
-                industry=excluded.industry,
-                linked_assets=excluded.linked_assets,
-                last_updated=excluded.last_updated
-        `);
-
-        // Wir füllen JEDES Feld mit einem Fallback, damit SQLite nicht meckert
-        return stmt.run({
-            symbol: ticker.symbol,
-            name: ticker.name || '',
-            type: ticker.type || 'stock',
-            sector: ticker.sector || '',   // WICHTIG: Fallback auf leerer String
-            industry: ticker.industry || '', // WICHTIG: Fallback auf leerer String
-            last_updated: ticker.last_updated || Date.now(),
-            linked_assets: JSON.stringify(ticker.linked_assets || [])
-        });
+        return WatchlistDAO.upsert(ticker);
     },
 
     /**
      * Löscht einen Ticker aus der lokalen Datenbank.
      * @param {string} symbol - Das zu löschende Symbol.
-     * @returns {Object} - Das Ergebnis des SQLite-Statements.
+     * @returns {Object} - Das Ergebnis der DAO-Operation.
      */
     deleteTicker: (symbol) => {
-        const stmt = db.prepare('DELETE FROM tickers WHERE symbol = ?');
-        return stmt.run(symbol);
+        return WatchlistDAO.delete(symbol);
     }
 };
 

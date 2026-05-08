@@ -169,6 +169,8 @@ window.StockMaster.IntelligenceModule = (() => {
       }
     }
 
+    const messages = window.StockMaster.Messages.UI;
+
     // Peer-Asset Korrelationen aus der Datenbank.
     if (currentData.correlations?.length > 0) {
       html += currentData.correlations.map(corr => `
@@ -179,7 +181,7 @@ window.StockMaster.IntelligenceModule = (() => {
       `).join('');
     }
 
-    correlationsList.innerHTML = html || 'Keine Daten.';
+    correlationsList.innerHTML = html || messages.NO_DATA;
   };
 
   /**

@@ -1,7 +1,7 @@
 // server/services/RequestManager.js
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
-const { PRIORITY, PROVIDER } = require('../utils/AppConstants');
+const { PRIORITY, PROVIDER, INTERNAL_ERR } = require('../utils/AppConstants');
 
 /**
  * Konfiguration für den RequestManager.
@@ -131,7 +131,7 @@ class RequestManager {
 
     } catch (error) {
       // Retry-Logik (Regel 12)
-      if (nextTask.retries < CONFIG.MAX_RETRIES && error.message !== 'AV_DAILY_LIMIT_REACHED') {
+      if (nextTask.retries < CONFIG.MAX_RETRIES && error.message !== INTERNAL_ERR.AV_DAILY_LIMIT) {
         nextTask.retries++;
         Logger.warn(`[RequestManager] Task fehlgeschlagen (${nextTask.provider}). Retry ${nextTask.retries}/${CONFIG.MAX_RETRIES}. Fehler: ${error.message}`);
         
@@ -139,7 +139,7 @@ class RequestManager {
         this.queues[nextTask.priority].push(nextTask);
       } else {
         // Finales Scheitern
-        if (error.message === 'AV_DAILY_LIMIT_REACHED') {
+        if (error.message === INTERNAL_ERR.AV_DAILY_LIMIT) {
           nextTask.reject({ status: HttpStatus.TOO_MANY_REQUESTS, message: 'Provider Limit Reached for today.' });
         } else {
           Logger.error(`[RequestManager] Task endgültig fehlgeschlagen nach ${nextTask.retries} Retries: ${error.message}`);

@@ -27,9 +27,12 @@ window.StockMaster.HttpClient = (function() {
    * @returns {Promise<any>} - Das JSON-Ergebnis des Requests.
    */
   async function request(endpoint, options = {}) {
+    const tech = window.StockMaster.AppConstants.TECH;
+    const messages = window.StockMaster.Messages.UI;
+
     notifyLoading(true);
     const config = {
-      method: options.method || 'GET',
+      method: options.method || tech.METHOD_GET,
       headers: { ...options.headers }
     };
 
@@ -51,7 +54,7 @@ window.StockMaster.HttpClient = (function() {
       // Standardisierte Antwortprüfung (Regel 13)
       if (result && typeof result.success === 'boolean') {
         if (!result.success) {
-          throw new Error(result.error || 'Unbekannter API-Fehler');
+          throw new Error(result.error || messages.UNKNOWN_API_ERR);
         }
         return result.data;
       }
@@ -60,9 +63,12 @@ window.StockMaster.HttpClient = (function() {
       return result;
 
     } catch (error) {
-      const errorNames = window.StockMaster.AppConstants.ERROR_NAMES;
-      if (error.name === errorNames.TYPE_ERROR && error.message === 'Failed to fetch') {
-        document.dispatchEvent(new CustomEvent(window.StockMaster.Events.ERROR_OCCURRED, {          detail: { message: 'Netzwerkfehler. Bitte Internetverbindung prüfen.' }
+      const constants = window.StockMaster.AppConstants;
+      const msg = window.StockMaster.Messages;
+
+      if (error.name === constants.ERROR_NAMES.TYPE_ERROR && error.message === msg.ERRORS.FAILED_TO_FETCH) {
+        document.dispatchEvent(new CustomEvent(window.StockMaster.Events.ERROR_OCCURRED, {
+          detail: { message: msg.UI.NETWORK_ERR }
         }));
       }
       throw error;
@@ -78,7 +84,7 @@ window.StockMaster.HttpClient = (function() {
    */
   function handleHttpError(response) {
     const HttpStatus = window.StockMaster.HttpStatus;
-    let errorMessage = 'Ein unbekannter API-Fehler ist aufgetreten.';
+    let errorMessage = window.StockMaster.Messages.UI.UNKNOWN_API_ERR;
     let isLimitError = false;
 
     if (response.status === HttpStatus.UNAUTHORIZED || response.status === HttpStatus.FORBIDDEN) {
@@ -104,7 +110,7 @@ window.StockMaster.HttpClient = (function() {
      * @param {Object} [headers] - Optionale Header.
      * @returns {Promise<any>}
      */
-    get: (url, headers) => request(url, { method: 'GET', headers }),
+    get: (url, headers) => request(url, { method: window.StockMaster.AppConstants.TECH.METHOD_GET, headers }),
 
     /**
      * Führt einen POST-Request aus.
@@ -113,7 +119,7 @@ window.StockMaster.HttpClient = (function() {
      * @param {Object} [headers] - Optionale Header.
      * @returns {Promise<any>}
      */
-    post: (url, body, headers) => request(url, { method: 'POST', body, headers }),
+    post: (url, body, headers) => request(url, { method: window.StockMaster.AppConstants.TECH.METHOD_POST, body, headers }),
 
     /**
      * Führt einen DELETE-Request aus.
@@ -121,6 +127,6 @@ window.StockMaster.HttpClient = (function() {
      * @param {Object} [headers] - Optionale Header.
      * @returns {Promise<any>}
      */
-    delete: (url, headers) => request(url, { method: 'DELETE', headers })
+    delete: (url, headers) => request(url, { method: window.StockMaster.AppConstants.TECH.METHOD_DELETE, headers })
   };
 })();

@@ -3,8 +3,9 @@ const axios = require('axios');
 const requestManager = require('../services/RequestManager');
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
+const MESSAGES = require('../utils/Messages');
 const { ProviderLimitError, ResourceNotFoundError } = require('../utils/Errors');
-const { PRIORITY, PROVIDER } = require('../utils/AppConstants');
+const { PRIORITY, PROVIDER, API } = require('../utils/AppConstants');
 
 /**
  * Repository für den Zugriff auf die AlphaVantage API.
@@ -15,7 +16,7 @@ const { PRIORITY, PROVIDER } = require('../utils/AppConstants');
 class AlphaVantageRepo {
   constructor() {
     this.apiKey = process.env.ALPHAVANTAGE_API_KEY;
-    this.baseUrl = process.env.ALPHAVANTAGE_BASE_URL || 'https://www.alphavantage.co/query';
+    this.baseUrl = process.env.ALPHAVANTAGE_BASE_URL || API.AV_BASE_URL;
     this.providerName = PROVIDER.ALPHA_VANTAGE;
   }
 
@@ -36,21 +37,21 @@ class AlphaVantageRepo {
     
     // Validierung des HTTP-Status (Regel 12)
     if (response.status !== HttpStatus.OK) {
-        throw new Error(`Alpha Vantage API lieferte Status ${response.status}`);
+        throw new Error(`${MESSAGES.ERR_AV_STATUS} ${response.status}`);
     }
 
     // Alpha Vantage gibt bei Limits oft 200 OK zurück, aber mit einer Info-Message
     if (response.data && response.data.Information && response.data.Information.includes('rate limit')) {
-      throw new ProviderLimitError('Alpha Vantage Daily Rate Limit erreicht.');
+      throw new ProviderLimitError(MESSAGES.ERR_AV_DAILY_LIMIT);
     }
     
     if (response.data && response.data.Note && response.data.Note.includes('API call frequency')) {
-      throw new ProviderLimitError('Alpha Vantage Minute Rate Limit erreicht.');
+      throw new ProviderLimitError(MESSAGES.ERR_AV_MINUTE_LIMIT);
     }
 
     // Fehlerprüfung für ungültige Symbole oder fehlende Daten (Regel 12)
     if (response.data && (response.data['Error Message'] || (Object.keys(response.data).length === 0))) {
-      throw new ResourceNotFoundError(`Keine Daten bei Alpha Vantage für Parameter: ${urlParams.get('symbol') || urlParams.get('tickers')}`);
+      throw new ResourceNotFoundError(`${MESSAGES.ERR_AV_NO_DATA} ${urlParams.get('symbol') || urlParams.get('tickers')}`);
     }
 
     return response.data;

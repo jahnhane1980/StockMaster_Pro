@@ -17,7 +17,7 @@ window.StockMaster.WatchlistModule = (() => {
     
     if (searchInput) {
       searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleAddTicker();
+        if (e.key === window.StockMaster.AppConstants.TECH.KEY_ENTER) handleAddTicker();
       });
     }
 

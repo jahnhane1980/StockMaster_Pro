@@ -33,9 +33,18 @@ window.StockMaster.AppConstants = (function() {
     TYPE_ERROR: 'TypeError'
   });
 
+  const TECH = Object.freeze({
+    KEY_ENTER: 'Enter',
+    METHOD_GET: 'GET',
+    METHOD_POST: 'POST',
+    METHOD_DELETE: 'DELETE',
+    TYPE_STOCK: 'stock'
+  });
+
   return {
     CHART_THEME,
     UI_DISPLAY_CONFIG,
-    ERROR_NAMES
+    ERROR_NAMES,
+    TECH
   };
 })();

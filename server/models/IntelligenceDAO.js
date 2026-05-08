@@ -1,6 +1,7 @@
 // server/models/IntelligenceDAO.js
 const { db } = require('../db/Database');
 const Logger = require('../utils/Logger');
+const { TECH } = require('../utils/AppConstants');
 
 /**
  * Datenzugriffsobjekt für Market Intelligence Daten.
@@ -28,7 +29,7 @@ class IntelligenceDAO {
     const stmt = db.prepare(sql);
     const result = stmt.run(
       ticker,
-      data.asset_type || 'STOCK',
+      data.asset_type || TECH.TYPE_STOCK_UPPER,
       data.market_cap || null,
       data.debt_equity || null,
       data.revenue_growth || null,

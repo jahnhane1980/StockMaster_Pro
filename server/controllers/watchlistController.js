@@ -6,6 +6,7 @@ const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
 const { StockMasterError } = require('../utils/Errors');
+const { TECH } = require('../utils/AppConstants');
 
 /**
  * Controller für die Verwaltung der Watchlist und des Intelligence Boards.
@@ -40,7 +41,7 @@ class WatchlistController {
       // 1. Ticker in der Datenbank speichern (Initialer Eintrag)
       TickerRepository.upsertTicker({ 
         symbol: ticker, 
-        name: name || '' 
+        name: name || TECH.EMPTY_STRING 
       });
 
       // Log für den Sync-Start

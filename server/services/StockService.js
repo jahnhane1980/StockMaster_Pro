@@ -5,7 +5,8 @@ const RequestManager = require('./RequestManager');
 const HistoricalDataDAO = require('../models/HistoricalDataDAO');
 const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
-const { PRIORITY, PROVIDER } = require('../utils/AppConstants');
+const MESSAGES = require('../utils/Messages');
+const { PRIORITY, PROVIDER, TECH } = require('../utils/AppConstants');
 
 /**
  * Fassade für alle Aktien-bezogenen Operationen.
@@ -46,7 +47,7 @@ class StockService {
         })
       ]);
 
-      const [quote, historyRaw, sentimentRaw] = results.map(r => r.status === 'fulfilled' ? r.value : null);
+      const [quote, historyRaw, sentimentRaw] = results.map(r => r.status === TECH.FULFILLED ? r.value : null);
 
       if (historyRaw) {
         const mappedHistory = this._mapAlphaVantageHistory(historyRaw);
@@ -161,9 +162,9 @@ class StockService {
     return {
         score: parseFloat(avgScore.toFixed(4)),
         news_count: feed.length,
-        last_news_title: relevantNews[0]?.title || 'Keine News',
-        last_news_url: relevantNews[0]?.url || '',
-        timestamp: this._formatAVTimestamp(relevantNews[0]?.time_published),
+        last_news_title: relevantNews[0]?.title || MESSAGES.UI_NO_NEWS,
+        last_news_url: relevantNews[0]?.url || TECH.EMPTY_STRING,
+        timestamp: this._formatAVTimestamp(item.time_published),
         provider: PROVIDER.ALPHA_VANTAGE
     };
   }

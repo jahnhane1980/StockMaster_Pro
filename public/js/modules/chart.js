@@ -92,7 +92,7 @@ window.StockMaster.ChartModule = (() => {
             overlay.innerHTML = `
                 <div class="chart-empty-state__content">
                     <ion-icon name="analytics-outline" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></ion-icon>
-                    <p>Keine historischen Daten für ${symbol} verfügbar.</p>
+                    <p>${window.StockMaster.Messages.UI.NO_DATA} (${symbol})</p>
                 </div>
             `;
             container.appendChild(overlay);
