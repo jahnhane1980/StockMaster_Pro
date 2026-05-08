@@ -16,8 +16,7 @@ class IntelligenceController {
    * 
    * @param {Object} req - Das Express Request-Objekt.
    * @param {Object} res - Das Express Response-Objekt.
-   * @returns {Promise<void>} - Sendet eine JSON-Antwort mit Korrelations-Scores.
-   * Antwort-Schema: { symbol: string, timestamp: string, correlations: { btc: Object, gold: Object } }
+   * @returns {Promise<void>} - Sendet eine JSON-Antwort mit Korrelations-Scores (Regel 13).
    */
   async getMarketCorrelations(req, res) {
     const symbol = req.params.symbol ? req.params.symbol.toUpperCase() : null;
@@ -28,6 +27,7 @@ class IntelligenceController {
       Logger.warn(`[IntelligenceController] Ungültiges Symbol abgelehnt: ${symbol}`);
       return res.status(HttpStatus.BAD_REQUEST).json({ 
         success: false, 
+        data: null,
         error: 'Ungültiges Symbol. Nur alphanumerische Zeichen (max. 10) erlaubt.' 
       });
     }
@@ -42,8 +42,9 @@ class IntelligenceController {
 
       if (!mainHistory || mainHistory.length < 10) {
         return res.status(HttpStatus.BAD_REQUEST).json({ 
-          error: 'Unzureichende historische Daten für das Haupt-Symbol.',
-          symbol: symbol
+          success: false,
+          data: { symbol: symbol },
+          error: 'Unzureichende historische Daten für das Haupt-Symbol.'
         });
       }
 
@@ -62,11 +63,15 @@ class IntelligenceController {
         correlations.gold = { correlation: 0, quality: 'Keine Gold-Referenzdaten' };
       }
 
-      // 3. Antwort senden
+      // 3. Antwort senden (Regel 13)
       return res.status(HttpStatus.OK).json({
-        symbol: symbol,
-        timestamp: new Date().toISOString(),
-        correlations: correlations
+        success: true,
+        data: {
+          symbol: symbol,
+          timestamp: new Date().toISOString(),
+          correlations: correlations
+        },
+        error: null
       });
 
     } catch (error) {
@@ -75,12 +80,14 @@ class IntelligenceController {
       if (error instanceof StockMasterError) {
         return res.status(error.statusCode).json({ 
           success: false,
+          data: null,
           error: error.message 
         });
       }
 
       return res.status(HttpStatus.SERVER_ERROR).json({ 
         success: false,
+        data: null,
         error: 'Interner Serverfehler bei der Korrelations-Berechnung.' 
       });
     }

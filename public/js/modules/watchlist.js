@@ -6,7 +6,6 @@ window.StockMaster.WatchlistModule = (() => {
   const searchInput = document.getElementById('ticker-search');
   const addBtn = document.getElementById('add-ticker-btn');
   const watchlistContainer = document.getElementById('watchlist-items');
-  const statusMsg = document.getElementById('status-message');
 
   /**
    * Initialisiert das Modul und registriert Event-Listener.
@@ -106,29 +105,22 @@ window.StockMaster.WatchlistModule = (() => {
     const symbol = searchInput.value.toUpperCase().trim();
     if (!symbol) return;
 
-    try {
-      if (statusMsg) statusMsg.textContent = `Sync für ${symbol}...`;
+    // Intent: Keine manuellen try-catch Blöcke oder Status-Anzeigen mehr (Regel 12 & 13).
+    // Fehler werden nun zentral vom HttpClient geworfen und via handleGlobalError verarbeitet.
+    await window.backendService.addTickerToWatchlist(symbol);
+
+    if (window.StockMaster.Events) {
+      // TICKER_ADDED triggert das automatische Refresh der Liste.
+      document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_ADDED, { 
+        detail: { symbol: symbol } 
+      }));
       
-      await window.backendService.addTickerToWatchlist(symbol);
-
-      if (window.StockMaster.Events) {
-        // TICKER_ADDED triggert das automatische Refresh der Liste.
-        document.dispatchEvent(new CustomEvent(window.StockMaster.Events.TICKER_ADDED, { 
-          detail: { symbol: symbol } 
-        }));
-        
-        document.dispatchEvent(new CustomEvent(window.StockMaster.Events.GLOBAL_NOTIFICATION, {
-          detail: { type: 'success', message: `${symbol} zur Watchlist hinzugefügt.` }
-        }));
-      }
-
-      searchInput.value = '';
-      if (statusMsg) statusMsg.textContent = '';
-
-    } catch (error) {
-      if (statusMsg) statusMsg.textContent = 'Fehler.';
-      handleGlobalError({ detail: { message: error.message, source: 'BackendService' } });
+      document.dispatchEvent(new CustomEvent(window.StockMaster.Events.GLOBAL_NOTIFICATION, {
+        detail: { type: 'success', message: `${symbol} zur Watchlist hinzugefügt.` }
+      }));
     }
+
+    searchInput.value = '';
   };
 
   /**

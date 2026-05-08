@@ -46,7 +46,18 @@ window.StockMaster.HttpClient = (function() {
         throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
       }
 
-      return await response.json();
+      const result = await response.json();
+
+      // Standardisierte Antwortprüfung (Regel 13)
+      if (result && typeof result.success === 'boolean') {
+        if (!result.success) {
+          throw new Error(result.error || 'Unbekannter API-Fehler');
+        }
+        return result.data;
+      }
+
+      // Fallback für nicht standardisierte Antworten
+      return result;
 
     } catch (error) {
       const errorNames = window.StockMaster.AppConstants.ERROR_NAMES;

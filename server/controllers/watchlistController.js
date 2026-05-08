@@ -18,8 +18,7 @@ class WatchlistController {
    * 
    * @param {Object} req - Das Express Request-Objekt. Erwartet { symbol: string, name?: string } im Body.
    * @param {Object} res - Das Express Response-Objekt.
-   * @returns {Promise<void>} - Sendet eine JSON-Antwort mit Erfolgsstatus.
-   * Antwort-Schema: { success: boolean, message: string }
+   * @returns {Promise<void>} - Sendet eine JSON-Antwort mit Erfolgsstatus (Regel 13).
    */
   async addTickerToWatchlist(req, res) {
     const { symbol, name } = req.body;
@@ -30,6 +29,7 @@ class WatchlistController {
       Logger.warn(`[WatchlistController] Ungültiges Symbol abgelehnt: ${symbol}`);
       return res.status(HttpStatus.BAD_REQUEST).json({ 
         success: false, 
+        data: null,
         error: 'Ungültiges Symbol. Nur alphanumerische Zeichen (max. 10) erlaubt.' 
       });
     }
@@ -47,19 +47,23 @@ class WatchlistController {
       Logger.info(`Background-Sync gestartet für Symbol: ${ticker}`);
       
       // 2. Hintergrund-Sync anstoßen (ohne await, um UI nicht zu blockieren)
-      // Der StockService kümmert sich um das Abrufen und Persistieren aller Daten.
       StockService.syncTickerData(ticker).catch(e => {
         Logger.error(`[WatchlistController] Hintergrund-Sync Fehler für ${ticker}: ${e.message}`);
       });
 
-      // Antwort an das Frontend
+      // Antwort an das Frontend (Regel 13)
       return res.status(HttpStatus.OK).json({ 
         success: true,
-        message: `${ticker} zur Watchlist hinzugefügt. Daten werden im Hintergrund synchronisiert.` 
+        data: { message: `${ticker} zur Watchlist hinzugefügt. Daten werden im Hintergrund synchronisiert.` },
+        error: null
       });
     } catch (err) {
       Logger.error(`[WatchlistController] Fehler beim Hinzufügen: ${err.message}`);
-      return res.status(HttpStatus.SERVER_ERROR).json({ error: 'Interner Serverfehler beim Speichern des Tickers.' });
+      return res.status(HttpStatus.SERVER_ERROR).json({ 
+        success: false, 
+        data: null, 
+        error: 'Interner Serverfehler beim Speichern des Tickers.' 
+      });
     }
   }
 
@@ -69,13 +73,17 @@ class WatchlistController {
    * 
    * @param {Object} req - Das Express Request-Objekt. Erwartet { mainTicker, linkedTicker, score } im Body.
    * @param {Object} res - Das Express Response-Objekt.
-   * @returns {Promise<void>} - Sendet JSON-Erfolgsstatus { success: boolean }.
+   * @returns {Promise<void>} - Sendet JSON-Erfolgsstatus (Regel 13).
    */
   async addCorrelation(req, res) {
     const { mainTicker, linkedTicker, score } = req.body;
 
     if (!mainTicker || !linkedTicker) {
-      return res.status(HttpStatus.BAD_REQUEST).json({ error: 'Haupt-Ticker oder verknüpfter Ticker fehlt.' });
+      return res.status(HttpStatus.BAD_REQUEST).json({ 
+        success: false, 
+        data: null, 
+        error: 'Haupt-Ticker oder verknüpfter Ticker fehlt.' 
+      });
     }
 
     // Score Validierung (Regel 4)
@@ -84,6 +92,7 @@ class WatchlistController {
       Logger.warn(`[WatchlistController] Ungültiger Korrelations-Score: ${score}`);
       return res.status(HttpStatus.BAD_REQUEST).json({ 
         success: false, 
+        data: null,
         error: 'Score muss eine Zahl zwischen -1 und 1 sein.' 
       });
     }
@@ -95,10 +104,18 @@ class WatchlistController {
         numericScore
       );
 
-      return res.status(HttpStatus.OK).json({ success: true });
+      return res.status(HttpStatus.OK).json({ 
+        success: true, 
+        data: null, 
+        error: null 
+      });
     } catch (err) {
       Logger.error(`[WatchlistController] Fehler beim Erstellen der Korrelation: ${err.message}`);
-      return res.status(HttpStatus.SERVER_ERROR).json({ error: 'Interner Serverfehler.' });
+      return res.status(HttpStatus.SERVER_ERROR).json({ 
+        success: false, 
+        data: null, 
+        error: 'Interner Serverfehler.' 
+      });
     }
   }
 
@@ -108,7 +125,7 @@ class WatchlistController {
    * 
    * @param {Object} req - Das Express Request-Objekt.
    * @param {Object} res - Das Express Response-Objekt.
-   * @returns {Promise<void>} - Sendet eine JSON-Antwort mit dem aggregierten Datenpaket (DTO).
+   * @returns {Promise<void>} - Sendet eine JSON-Antwort mit dem aggregierten Datenpaket (DTO) (Regel 13).
    */
   async getIntelligenceBoard(req, res) {
     const ticker = req.params.ticker.toUpperCase();
@@ -116,19 +133,25 @@ class WatchlistController {
     try {
       // StockService aggregiert Daten von verschiedenen Providern und aus der DB.
       const intelligenceData = await StockService.getIntelligenceData(ticker);
-      return res.status(HttpStatus.OK).json(intelligenceData);
+      return res.status(HttpStatus.OK).json({
+        success: true,
+        data: intelligenceData,
+        error: null
+      });
     } catch (error) {
       Logger.error(`[WatchlistController] Fehler Board für ${ticker}: ${error.message}`);
       
       if (error instanceof StockMasterError) {
         return res.status(error.statusCode).json({ 
           success: false,
+          data: null,
           error: error.message 
         });
       }
       
       return res.status(HttpStatus.SERVER_ERROR).json({ 
         success: false,
+        data: null,
         error: 'Interner Serverfehler beim Laden der Board-Daten.' 
       });
     }
