@@ -1,6 +1,6 @@
 // server/repositories/TickerRepository.js
 const RequestManager = require('../services/RequestManager');
-const MassiveRepo = require('./MassiveRepo');
+const RepoFactory = require('./RepoFactory');
 const WatchlistDAO = require('../models/WatchlistDAO');
 const { PRIORITY, PROVIDER } = require('../utils/AppConstants');
 
@@ -30,7 +30,7 @@ const TickerRepository = {
      * @returns {Promise<Object|null>} - Das aktuelle Preis-Objekt von Massive.
      */
     async getRealtimePrice(symbol) {
-        return RequestManager.enqueue(PRIORITY.CRITICAL, PROVIDER.MASSIVE, () => MassiveRepo.getRealtimeQuote(symbol));
+        return RequestManager.enqueue(PRIORITY.CRITICAL, PROVIDER.MASSIVE, () => RepoFactory.getMassiveRepo().getRealtimeQuote(symbol));
     },
 
     /**

@@ -1,6 +1,5 @@
 // server/services/StockService.js
-const AlphaVantageRepo = require('../repositories/AlphaVantageRepo');
-const MassiveRepo = require('../repositories/MassiveRepo');
+const RepoFactory = require('../repositories/RepoFactory');
 const RequestManager = require('./RequestManager');
 const HistoricalDataDAO = require('../models/HistoricalDataDAO');
 const IntelligenceDAO = require('../models/IntelligenceDAO');
@@ -16,13 +15,18 @@ const { PRIORITY, PROVIDER, TECH } = require('../utils/AppConstants');
  * Massive für kritische Echtzeit-Kurse (P1) und das Schließen von Datenlücken (Diffs).
  */
 class StockService {
+  constructor() {
+    this.alphaVantageRepo = RepoFactory.getAlphaVantageRepo();
+    this.massiveRepo = RepoFactory.getMassiveRepo();
+  }
+
   /**
    * Holt den Echtzeit-Preis über den RequestManager (Massive P1).
    * @param {string} symbol - Das Aktiensymbol.
    * @returns {Promise<Object|null>} - Das aktuelle Preis-Objekt.
    */
   async getRealtimePrice(symbol) {
-    return RequestManager.enqueue(PRIORITY.CRITICAL, PROVIDER.MASSIVE, () => MassiveRepo.getRealtimeQuote(symbol));
+    return RequestManager.enqueue(PRIORITY.CRITICAL, PROVIDER.MASSIVE, () => this.massiveRepo.getRealtimeQuote(symbol));
   }
 
   /**
@@ -37,11 +41,11 @@ class StockService {
       // Realtime (Massive P1), Historie (AV P2) und Sentiment (AV P3)
       const results = await Promise.allSettled([
         this.getRealtimePrice(ticker),
-        AlphaVantageRepo.getDailyHistory(ticker).catch(err => {
+        this.alphaVantageRepo.getDailyHistory(ticker).catch(err => {
             Logger.error(`[StockService] Fehler bei History-Sync (${ticker}): ${err.message}`);
             return null;
         }),
-        AlphaVantageRepo.getNewsSentiment(ticker).catch(err => {
+        this.alphaVantageRepo.getNewsSentiment(ticker).catch(err => {
             Logger.warn(`[StockService] Sentiment für ${ticker} konnte nicht geladen werden.`);
             return null;
         })
@@ -82,7 +86,7 @@ class StockService {
       
       if (!history || history.length === 0) {
         Logger.info(`[StockService] Keine Historie für ${ticker}. Hole 5 Jahre von AV...`);
-        const historyRaw = await AlphaVantageRepo.getDailyHistory(ticker);
+        const historyRaw = await this.alphaVantageRepo.getDailyHistory(ticker);
         const mappedHistory = this._mapAlphaVantageHistory(historyRaw);
         await HistoricalDataDAO.insertMany(ticker, mappedHistory, PROVIDER.ALPHA_VANTAGE);
         history = mappedHistory;
@@ -93,7 +97,7 @@ class StockService {
       if (!fundamentals || (Date.now() - fundamentals.last_updated > 2592000000)) { 
         // Fundamentaldaten fehlen oder sind älter als 30 Tage -> AV fragen
         Logger.info(`[StockService] Fundamentals für ${ticker} veraltet. Hole von AV...`);
-        const fundamentalsRaw = await AlphaVantageRepo.getFundamentalsOverview(ticker);
+        const fundamentalsRaw = await this.alphaVantageRepo.getFundamentalsOverview(ticker);
         const mappedFundamentals = this._mapAlphaVantageFundamentals(fundamentalsRaw);
         await IntelligenceDAO.upsertFundamentals(ticker, mappedFundamentals);
         fundamentals = mappedFundamentals;
@@ -102,7 +106,7 @@ class StockService {
       // 4. TECHNICALS (OBV)
       let obvData = null;
       try {
-        const obvRaw = await AlphaVantageRepo.getOBV(ticker);
+        const obvRaw = await this.alphaVantageRepo.getOBV(ticker);
         obvData = this._mapAlphaVantageOBV(obvRaw);
       } catch (e) {
         Logger.warn(`[StockService] OBV für ${ticker} nicht verfügbar.`);

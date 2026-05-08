@@ -13,7 +13,7 @@ const Logger = require('./utils/Logger');
 
 // Repositories
 const TickerRepository = require('./repositories/TickerRepository');
-const AlphaVantageRepo = require('./repositories/AlphaVantageRepo');
+const RepoFactory = require('./repositories/RepoFactory');
 
 // Services
 const RequestManager = require('./services/RequestManager');
@@ -89,7 +89,7 @@ app.get('/api/intelligence/correlations/:symbol', (req, res) => IntelligenceCont
 app.get('/api/fundamentals/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     try {
-        const data = await RequestManager.enqueue("P3", "AV", () => AlphaVantageRepo.getCompanyOverview(symbol));
+        const data = await RequestManager.enqueue("P3", "AV", () => RepoFactory.getAlphaVantageRepo().getCompanyOverview(symbol));
         res.json(data);
     } catch (err) {
         Logger.error(`[Server] Fehler bei Fundamentaldaten-Abruf für ${symbol}: ${err.message}`);
