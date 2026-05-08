@@ -7,7 +7,7 @@ const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
 const MESSAGES = require('../utils/Messages');
 const { StockMasterError, ProviderLimitError, ResourceNotFoundError } = require('../utils/Errors');
-const { PRIORITY, PROVIDER, TECH } = require('../utils/AppConstants');
+const { PRIORITY, PROVIDER, TECH, CONFIG } = require('../utils/AppConstants');
 
 /**
  * Fassade für alle Aktien-bezogenen Operationen.
@@ -140,7 +140,7 @@ class StockService {
 
       // 3. FUNDAMENTALDATEN (Metadata)
       let metadata = await IntelligenceDAO.getMetadata(ticker);
-      if (!metadata || (Date.now() - new Date(metadata.last_updated_fundamentals).getTime() > 2592000000)) { 
+      if (!metadata || (Date.now() - new Date(metadata.last_updated_fundamentals).getTime() > CONFIG.CACHE_DURATION_MS)) { 
         Logger.info(`[StockService] Fundamentals für ${ticker} veraltet. Hole von AV...`);
         const harmonizedFundamentals = await this.alphaVantageRepo.getFundamentalsOverview(ticker);
         await IntelligenceDAO.upsertMetadata(ticker, harmonizedFundamentals);

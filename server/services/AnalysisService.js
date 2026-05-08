@@ -1,17 +1,6 @@
 // server/services/AnalysisService.js
 const Logger = require('../utils/Logger');
-
-/**
- * Konfiguration für die Analyse-Logik.
- * Intent: Zentralisierung statistischer Schwellenwerte (Regel 6).
- */
-const ANALYSIS_CONFIG = Object.freeze({
-  MIN_SAMPLE_SIZE: 5,
-  CORRELATION_EXCELLENT: 0.9,
-  CORRELATION_STRONG: 0.7,
-  CORRELATION_MODERATE: 0.4,
-  CORRELATION_WEAK: 0.1
-});
+const { ANALYSIS, API } = require('../utils/AppConstants');
 
 /**
  * Service für die statistische Analyse von Marktdaten.
@@ -51,8 +40,8 @@ class AnalysisService {
     }
 
     const n = alignedX.length;
-    if (n < ANALYSIS_CONFIG.MIN_SAMPLE_SIZE) { // Zu wenig Überlappung für eine sinnvolle Aussage
-      Logger.warn(`[AnalysisService] Korrelation unpräzise: Zu wenig Überlappung (n=${n}). Erwarte min. ${ANALYSIS_CONFIG.MIN_SAMPLE_SIZE}.`);
+    if (n < ANALYSIS.MIN_SAMPLE_SIZE) { // Zu wenig Überlappung für eine sinnvolle Aussage
+      Logger.warn(`[AnalysisService] Korrelation unpräzise: Zu wenig Überlappung (n=${n}). Erwarte min. ${ANALYSIS.MIN_SAMPLE_SIZE}.`);
       return { correlation: 0, quality: 'Zu wenig Überlappung', sampleSize: n };
     }
 
@@ -83,7 +72,7 @@ class AnalysisService {
     const correlation = numerator / denominator;
 
     return {
-      correlation: parseFloat(correlation.toFixed(4)),
+      correlation: parseFloat(correlation.toFixed(API.ALPHA_VANTAGE.DECIMAL_PRECISION)),
       quality: this._getQualitativeDescription(correlation),
       sampleSize: n
     };
@@ -99,10 +88,10 @@ class AnalysisService {
     const absR = Math.abs(r);
     let desc = '';
 
-    if (absR >= ANALYSIS_CONFIG.CORRELATION_EXCELLENT) desc = 'Sehr starke';
-    else if (absR >= ANALYSIS_CONFIG.CORRELATION_STRONG) desc = 'Starke';
-    else if (absR >= ANALYSIS_CONFIG.CORRELATION_MODERATE) desc = 'Moderate';
-    else if (absR >= ANALYSIS_CONFIG.CORRELATION_WEAK) desc = 'Schwache';
+    if (absR >= ANALYSIS.CORRELATION_EXCELLENT) desc = 'Sehr starke';
+    else if (absR >= ANALYSIS.CORRELATION_STRONG) desc = 'Starke';
+    else if (absR >= ANALYSIS.CORRELATION_MODERATE) desc = 'Moderate';
+    else if (absR >= ANALYSIS.CORRELATION_WEAK) desc = 'Schwache';
     else return 'Nahezu keine Korrelation';
 
     const direction = r > 0 ? 'positive Korrelation' : 'negative Korrelation (Divergenz)';

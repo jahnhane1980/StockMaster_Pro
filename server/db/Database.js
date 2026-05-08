@@ -2,6 +2,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const Logger = require('../utils/Logger');
+const { DATABASE } = require('../utils/AppConstants');
 
 /**
  * Pfad zur SQLite-Datenbankdatei.
@@ -11,7 +12,7 @@ const Logger = require('../utils/Logger');
  */
 const dbPath = process.env.DB_STORAGE_PATH 
     ? path.resolve(process.cwd(), process.env.DB_STORAGE_PATH)
-    : path.resolve(__dirname, '../data/stockmaster.db');
+    : path.resolve(process.cwd(), DATABASE.DEFAULT_PATH);
 
 /**
  * Zentrale Datenbankinstanz (better-sqlite3).

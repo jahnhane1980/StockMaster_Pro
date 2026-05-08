@@ -2,7 +2,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const Logger = require('../utils/Logger');
-const { PROVIDER } = require('../utils/AppConstants');
+const { PROVIDER, API } = require('../utils/AppConstants');
 
 /**
  * Mock-Repository für den Zugriff auf die AlphaVantage API.
@@ -72,10 +72,10 @@ class AlphaVantageRepoMock {
   /**
    * Holt simulierten On-Balance Volume Indikator.
    * @param {string} ticker - Das Aktiensymbol.
-   * @param {string} [interval='daily'] - Zeitintervall.
+   * @param {string} [interval=API.AV_PARAMS.DAILY] - Zeitintervall.
    * @returns {Promise<Object|null>} - OBV-Zeitreihe aus der Fixture.
    */
-  async getOBV(ticker, interval = 'daily') {
+  async getOBV(ticker, interval = API.AV_PARAMS.DAILY) {
     return this._readFixture(`alpha_vantage_obv_${ticker.toLowerCase()}_${interval}.json`);
   }
 }

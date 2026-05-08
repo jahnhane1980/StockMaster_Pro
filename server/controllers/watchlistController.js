@@ -7,7 +7,7 @@ const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
 const MESSAGES = require('../utils/Messages');
 const { StockMasterError } = require('../utils/Errors');
-const { TECH, CONFIG, RESPONSE_KEYS } = require('../utils/AppConstants');
+const { TECH, CONFIG, RESPONSE_KEYS, VALIDATION } = require('../utils/AppConstants');
 
 /**
  * Controller für die Verwaltung der Watchlist und des Intelligence Boards.
@@ -26,8 +26,7 @@ class WatchlistController {
     const { symbol, name } = req.body;
 
     // Strikte Validierung (Regel 4 & 12)
-    const symbolRegex = /^[A-Za-z0-9]{1,10}$/;
-    if (!symbol || !symbolRegex.test(symbol)) {
+    if (!symbol || !VALIDATION.SYMBOL_REGEX.test(symbol)) {
       Logger.warn(`[WatchlistController] Ungültiges Symbol abgelehnt: ${symbol}`);
       return res.status(HttpStatus.BAD_REQUEST).json({ 
         [RESPONSE_KEYS.SUCCESS]: false, 

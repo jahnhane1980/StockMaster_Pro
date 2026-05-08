@@ -5,7 +5,7 @@ const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
 const MESSAGES = require('../utils/Messages');
 const { StockMasterError } = require('../utils/Errors');
-const { CONFIG, RESPONSE_KEYS } = require('../utils/AppConstants');
+const { CONFIG, RESPONSE_KEYS, VALIDATION } = require('../utils/AppConstants');
 
 /**
  * Controller für komplexe Markt-Analysen und Intelligence-Abfragen.
@@ -24,8 +24,7 @@ class IntelligenceController {
     const symbol = req.params.symbol ? req.params.symbol.toUpperCase() : null;
 
     // Strikte Validierung (Regel 4 & 12)
-    const symbolRegex = /^[A-Za-z0-9]{1,10}$/;
-    if (!symbol || !symbolRegex.test(symbol)) {
+    if (!symbol || !VALIDATION.SYMBOL_REGEX.test(symbol)) {
       Logger.warn(`[IntelligenceController] Ungültiges Symbol abgelehnt: ${symbol}`);
       return res.status(HttpStatus.BAD_REQUEST).json({ 
         [RESPONSE_KEYS.SUCCESS]: false, 

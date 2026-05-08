@@ -16,7 +16,11 @@ const PROVIDER = Object.freeze({
 const API = Object.freeze({
   // Provider-Konfigurationen (Regel 18.2)
   ALPHA_VANTAGE: {
-    BASE_URL: 'https://www.alphavantage.co/query'
+    BASE_URL: 'https://www.alphavantage.co/query',
+    NEWS_LIMIT: 50,
+    NEWS_SELECTION: 10,
+    OBV_PERIOD: 30,
+    DECIMAL_PRECISION: 4
   },
   MASSIVE: {
     BASE_URL: 'https://api.massive.com/v3'
@@ -89,7 +93,37 @@ const CONFIG = Object.freeze({
     POSITIVE: 1
   },
   DB_VERSION: 2,
-  CACHE_DURATION_MS: 2592000000 // 30 Tage
+  CACHE_DURATION_MS: 2592000000, // 30 Tage
+  REQUEST_MANAGER: {
+    MAX_RETRIES: 3,
+    DAILY_API_LIMIT: 25,
+    MAX_QUEUE_SIZE: 100,
+    MINUTE_API_LIMIT: 5,
+    RESET_INTERVAL: 60000,
+    LIMIT_WAIT_TIME: 1000
+  }
+});
+
+const ANALYSIS = Object.freeze({
+  MIN_SAMPLE_SIZE: 5,
+  CORRELATION_STRONG: 0.7,
+  CORRELATION_EXCELLENT: 0.9,
+  CORRELATION_MODERATE: 0.4,
+  CORRELATION_WEAK: 0.1
+});
+
+const VALIDATION = Object.freeze({
+  SYMBOL_REGEX: /^[A-Za-z0-9]{1,10}$/
+});
+
+const DATABASE = Object.freeze({
+  DEFAULT_PATH: 'server/data/stockmaster.db'
+});
+
+const SERVER = Object.freeze({
+  DEFAULT_PORT: 3000,
+  RATE_LIMIT_WINDOW_MS: 900000, // 15 Minuten
+  RATE_LIMIT_MAX_REQUESTS: 100
 });
 
 const RESPONSE_KEYS = Object.freeze({
@@ -106,5 +140,9 @@ module.exports = {
   TECH,
   LOG,
   CONFIG,
+  ANALYSIS,
+  VALIDATION,
+  DATABASE,
+  SERVER,
   RESPONSE_KEYS
 };

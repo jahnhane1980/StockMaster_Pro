@@ -132,18 +132,18 @@ class AlphaVantageRepo {
       const rawData = await this._fetchFromAPI({
         function: API.AV_FUNCTIONS.SENTIMENT,
         tickers: ticker,
-        limit: 50
+        limit: API.ALPHA_VANTAGE.NEWS_LIMIT
       });
       
       const feed = rawData.feed || [];
-      const relevantNews = feed.slice(0, 10);
+      const relevantNews = feed.slice(0, API.ALPHA_VANTAGE.NEWS_SELECTION);
       const avgScore = relevantNews.reduce((sum, item) => {
         const tickerData = item.ticker_sentiment?.find(s => s.ticker === ticker);
         return sum + (tickerData ? parseFloat(tickerData.ticker_sentiment_score) : 0);
       }, 0) / (relevantNews.length || 1);
 
       return {
-        sentiment_score: parseFloat(avgScore.toFixed(4)),
+        sentiment_score: parseFloat(avgScore.toFixed(API.ALPHA_VANTAGE.DECIMAL_PRECISION)),
         relevance_score: 1.0,
         news_count: feed.length,
         last_news_title: relevantNews[0]?.title || 'Keine News verfügbar',
@@ -208,7 +208,7 @@ class AlphaVantageRepo {
       });
 
       const data = rawData[API.AV_RESPONSE_KEYS.TECHNICAL_OBV] || {};
-      const obvList = Object.keys(data).slice(0, 30).map(date => ({
+      const obvList = Object.keys(data).slice(0, API.ALPHA_VANTAGE.OBV_PERIOD).map(date => ({
         date,
         value: parseFloat(data[date]['OBV'])
       })).reverse();

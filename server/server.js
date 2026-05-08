@@ -10,7 +10,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { initDB } = require('./db/Database');
 const Logger = require('./utils/Logger');
-const { PRIORITY, PROVIDER } = require('./utils/AppConstants');
+const { PRIORITY, PROVIDER, SERVER } = require('./utils/AppConstants');
 
 // Repositories
 const TickerRepository = require('./repositories/TickerRepository');
@@ -24,7 +24,7 @@ const WatchlistController = require('./controllers/WatchlistController');
 const IntelligenceController = require('./controllers/IntelligenceController');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || SERVER.DEFAULT_PORT;
 
 // Security Middlewares
 app.use(helmet());
@@ -36,8 +36,8 @@ app.use(cors({
 
 // Rate Limiting für API-Routen (Regel 12)
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 Minuten
-  max: 100, // Limit auf 100 Requests pro Fenster
+  windowMs: SERVER.RATE_LIMIT_WINDOW_MS,
+  max: SERVER.RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

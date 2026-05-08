@@ -1,20 +1,7 @@
 // server/services/RequestManager.js
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
-const { PRIORITY, PROVIDER, INTERNAL_ERR } = require('../utils/AppConstants');
-
-/**
- * Konfiguration für den RequestManager.
- * Intent: Zentralisierung von Magic Numbers zur besseren Wartbarkeit (Regel 6).
- */
-const CONFIG = Object.freeze({
-  MAX_QUEUE_SIZE: 100,
-  MAX_RETRIES: 3,
-  DAILY_API_LIMIT: 25,
-  MINUTE_API_LIMIT: 5,
-  RESET_INTERVAL: 60000,
-  LIMIT_WAIT_TIME: 1000
-});
+const { PRIORITY, PROVIDER, INTERNAL_ERR, CONFIG } = require('../utils/AppConstants');
 
 /**
  * Zentraler Manager für alle ausgehenden API-Anfragen an externe Provider.
@@ -34,16 +21,16 @@ class RequestManager {
     };
 
     // Limits & Tracking
-    this.avDailyLimit = CONFIG.DAILY_API_LIMIT;
+    this.avDailyLimit = CONFIG.REQUEST_MANAGER.DAILY_API_LIMIT;
     this.avRequestsToday = 0; 
-    this.avRequestsPerMinute = CONFIG.MINUTE_API_LIMIT;
+    this.avRequestsPerMinute = CONFIG.REQUEST_MANAGER.MINUTE_API_LIMIT;
     this.avRequestsThisMinute = 0;
     
     // Status
     this.isProcessing = false;
     
     // Reset Timer für das Minutenlimit (60 Sek)
-    setInterval(() => { this.avRequestsThisMinute = 0; }, CONFIG.RESET_INTERVAL); 
+    setInterval(() => { this.avRequestsThisMinute = 0; }, CONFIG.REQUEST_MANAGER.RESET_INTERVAL); 
   }
 
   /**
@@ -57,8 +44,8 @@ class RequestManager {
   enqueue(priority, provider, taskFn) {
     return new Promise((resolve, reject) => {
       // Memory-Schutz: Queue-Größe prüfen
-      if (this.queues[priority].length >= CONFIG.MAX_QUEUE_SIZE) {
-        Logger.error(`[RequestManager] Queue ${priority} voll (${CONFIG.MAX_QUEUE_SIZE}). Task verworfen.`);
+      if (this.queues[priority].length >= CONFIG.REQUEST_MANAGER.MAX_QUEUE_SIZE) {
+        Logger.error(`[RequestManager] Queue ${priority} voll (${CONFIG.REQUEST_MANAGER.MAX_QUEUE_SIZE}). Task verworfen.`);
         return reject(new Error(`Queue ${priority} ist voll. Bitte später versuchen.`));
       }
 
@@ -111,7 +98,7 @@ class RequestManager {
                          this.queues[PRIORITY.IMPORTANT].length > 0 || 
                          this.queues[PRIORITY.BACKGROUND].length > 0;
       if (hasAVTasks) {
-        setTimeout(() => this.processQueue(), CONFIG.LIMIT_WAIT_TIME);
+        setTimeout(() => this.processQueue(), CONFIG.REQUEST_MANAGER.LIMIT_WAIT_TIME);
       }
       return;
     }
@@ -131,9 +118,9 @@ class RequestManager {
 
     } catch (error) {
       // Retry-Logik (Regel 12)
-      if (nextTask.retries < CONFIG.MAX_RETRIES && error.message !== INTERNAL_ERR.AV_DAILY_LIMIT) {
+      if (nextTask.retries < CONFIG.REQUEST_MANAGER.MAX_RETRIES && error.message !== INTERNAL_ERR.AV_DAILY_LIMIT) {
         nextTask.retries++;
-        Logger.warn(`[RequestManager] Task fehlgeschlagen (${nextTask.provider}). Retry ${nextTask.retries}/${CONFIG.MAX_RETRIES}. Fehler: ${error.message}`);
+        Logger.warn(`[RequestManager] Task fehlgeschlagen (${nextTask.provider}). Retry ${nextTask.retries}/${CONFIG.REQUEST_MANAGER.MAX_RETRIES}. Fehler: ${error.message}`);
         
         // Zurück in die Queue (ans Ende der jeweiligen Priorität)
         this.queues[nextTask.priority].push(nextTask);

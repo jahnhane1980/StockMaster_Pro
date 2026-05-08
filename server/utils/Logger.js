@@ -5,10 +5,11 @@
 const winston = require('winston');
 require('winston-daily-rotate-file');
 const path = require('path');
+const { LOG } = require('./AppConstants');
 
 // Konfiguration aus Umgebungsvariablen beziehen
-const logDir = process.env.LOG_DIR || 'server/logs';
-const logLevel = process.env.LOG_LEVEL || 'info';
+const logDir = process.env.LOG_DIR || LOG.DEFAULT_DIR;
+const logLevel = process.env.LOG_LEVEL || LOG.DEFAULT_LEVEL;
 
 /**
  * Erstellt ein Format für die Log-Ausgabe.
