@@ -42,10 +42,21 @@ const initDB = () => {
             type TEXT DEFAULT 'stock',
             sector TEXT,
             industry TEXT,
+            last_price REAL,
+            price_change_percent REAL,
             linked_assets TEXT, -- Gespeichert als JSON-String
             last_updated INTEGER,
             added_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`).run();
+
+        // Migration: Spalten hinzufügen, falls sie in einer älteren Version fehlen
+        const tableInfo = db.prepare("PRAGMA table_info(tickers)").all();
+        const hasLastPrice = tableInfo.some(col => col.name === 'last_price');
+        if (!hasLastPrice) {
+            db.prepare("ALTER TABLE tickers ADD COLUMN last_price REAL").run();
+            db.prepare("ALTER TABLE tickers ADD COLUMN price_change_percent REAL").run();
+            Logger.info('[DB] Migration: last_price Spalten zu tickers hinzugefügt.');
+        }
 
         // 2. HISTORICAL DATA (Hybrid-Tabelle für verschiedene Provider)
         db.prepare(`CREATE TABLE IF NOT EXISTS historical_data (

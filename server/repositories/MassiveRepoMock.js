@@ -1,6 +1,7 @@
 // server/repositories/MassiveRepoMock.js
 const fs = require('fs').promises;
 const path = require('path');
+const MarketDataMapper = require('../utils/MarketDataMapper');
 const Logger = require('../utils/Logger');
 const { PROVIDER } = require('../utils/AppConstants');
 
@@ -36,10 +37,17 @@ class MassiveRepoMock {
   /**
    * Holt einen simulierten Echtzeit-Kurs.
    * @param {string} ticker - Das Aktiensymbol.
-   * @returns {Promise<Object|null>} - Das aktuelle Kurs-Objekt aus der Fixture.
+   * @returns {Promise<Object|null>} - Das harmonisierte Kurs-Objekt.
    */
   async getRealtimeQuote(ticker) {
-    return this._readFixture(`massive_quote_${ticker.toLowerCase()}.json`);
+    const symbol = ticker.toUpperCase();
+    const rawData = await this._readFixture(`massive_get_realtime_quote_${symbol.toLowerCase()}.json`);
+    
+    if (!rawData || !rawData.results || rawData.results.length === 0) return null;
+    
+    const result = rawData.results[0];
+    // Nutzt den zentralen Mapper (Regel 1)
+    return MarketDataMapper.toQuote(symbol, result.c, result.o, result.v, result.t);
   }
 
   /**

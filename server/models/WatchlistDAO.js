@@ -71,6 +71,27 @@ class WatchlistDAO {
       throw new Error(MESSAGES.ERR_DB_OP);
     }
   }
+
+  /**
+   * Aktualisiert den letzten Preis und die Änderung für einen Ticker.
+   * @param {string} symbol - Das Aktiensymbol.
+   * @param {number} price - Der aktuelle Kurs.
+   * @param {number} changePercent - Die prozentuale Änderung.
+   * @returns {Object} - Ergebnis der Operation.
+   */
+  updatePrice(symbol, price, changePercent) {
+    try {
+      const stmt = db.prepare(`
+        UPDATE tickers 
+        SET last_price = ?, price_change_percent = ?, last_updated = ?
+        WHERE symbol = ?
+      `);
+      return stmt.run(price, changePercent, Date.now(), symbol);
+    } catch (error) {
+      Logger.error(`[WatchlistDAO] Error in updatePrice for ${symbol}: ${error.message}`);
+      throw new Error(MESSAGES.ERR_DB_OP);
+    }
+  }
 }
 
 module.exports = new WatchlistDAO();

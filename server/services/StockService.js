@@ -1,18 +1,18 @@
 // server/services/StockService.js
 const RepoFactory = require('../repositories/RepoFactory');
+const TickerRepository = require('../repositories/TickerRepository');
 const RequestManager = require('./RequestManager');
 const HistoricalDataDAO = require('../models/HistoricalDataDAO');
 const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
 const MESSAGES = require('../utils/Messages');
+const { StockMasterError, ProviderLimitError, ResourceNotFoundError } = require('../utils/Errors');
 const { PRIORITY, PROVIDER, TECH } = require('../utils/AppConstants');
 
 /**
  * Fassade für alle Aktien-bezogenen Operationen.
  * Intent: Dieser Service bündelt die Logik für Ticker-Stammdaten und Kurse. 
- * Er verwaltet die Fallback-Hierarchie zwischen Providern: AlphaVantage wird für 
- * historische Daten und Sentiment genutzt (da kostengünstig/Free Tier), 
- * Massive für kritische Echtzeit-Kurse (P1) und das Schließen von Datenlücken (Diffs).
+ * Er verwaltet die Fallback-Hierarchie zwischen Providern und harmonisiert Fehler.
  */
 class StockService {
   constructor() {
@@ -21,12 +21,56 @@ class StockService {
   }
 
   /**
+   * Zentraler Error-Mapper (Regel 12).
+   * Übersetzt Provider-Fehler in ein einheitliches App-Format.
+   * @param {Error} error - Der ursprüngliche Fehler.
+   * @param {string} context - Kontext der Operation.
+   * @private
+   */
+  _handleError(error, context) {
+    Logger.error(`[StockService] ${context}: ${error.message}`);
+    
+    if (error instanceof ProviderLimitError || error instanceof ResourceNotFoundError) {
+      return error;
+    }
+    
+    // Fallback auf Standard-Fehler
+    return new StockMasterError(`${MESSAGES.ERR_INTERNAL} (${context})`, 500);
+  }
+
+  /**
    * Holt den Echtzeit-Preis über den RequestManager (Massive P1).
    * @param {string} symbol - Das Aktiensymbol.
-   * @returns {Promise<Object|null>} - Das aktuelle Preis-Objekt.
+   * @returns {Promise<Object|null>} - Das aktuelle harmonisierte Preis-Objekt.
    */
   async getRealtimePrice(symbol) {
-    return RequestManager.enqueue(PRIORITY.CRITICAL, PROVIDER.MASSIVE, () => this.massiveRepo.getRealtimeQuote(symbol));
+    try {
+      return await RequestManager.enqueue(PRIORITY.CRITICAL, PROVIDER.MASSIVE, () => this.massiveRepo.getRealtimeQuote(symbol));
+    } catch (e) {
+      throw this._handleError(e, `RealtimePrice ${symbol}`);
+    }
+  }
+
+  /**
+   * Synchronisiert einen Ticker (Hintergrund-Task).
+   * Prüft ob ein Full-Sync oder ein inkrementelles Update (Diff) nötig ist.
+   * @param {string} ticker - Das Symbol.
+   */
+  async syncTickerData(ticker) {
+    try {
+      const lastDate = await HistoricalDataDAO.getLastRecordDate(ticker);
+      
+      if (!lastDate) {
+        Logger.info(`[StockService] Starte Full-Sync für ${ticker}`);
+        return await this.initializeTicker(ticker);
+      }
+
+      Logger.info(`[StockService] Starte inkrementelles Update für ${ticker} (ab ${lastDate})`);
+      // Hier könnte später die Massive-Diff-Logik folgen. Aktuell priorisieren wir initializeTicker.
+      return await this.initializeTicker(ticker);
+    } catch (e) {
+      Logger.error(`[StockService] Sync-Fehler für ${ticker}: ${e.message}`);
+    }
   }
 
   /**
@@ -38,184 +82,96 @@ class StockService {
     try {
       Logger.info(`[StockService] Initialisiere Ticker: ${ticker}`);
       
-      // Realtime (Massive P1), Historie (AV P2) und Sentiment (AV P3)
+      // Nutzt ausschließlich harmonisierte Repository-Methoden (Regel 1)
       const results = await Promise.allSettled([
         this.getRealtimePrice(ticker),
-        this.alphaVantageRepo.getDailyHistory(ticker).catch(err => {
-            Logger.error(`[StockService] Fehler bei History-Sync (${ticker}): ${err.message}`);
-            return null;
-        }),
-        this.alphaVantageRepo.getNewsSentiment(ticker).catch(err => {
-            Logger.warn(`[StockService] Sentiment für ${ticker} konnte nicht geladen werden.`);
-            return null;
-        })
+        this.alphaVantageRepo.getDailyHistory(ticker),
+        this.alphaVantageRepo.getNewsSentiment(ticker)
       ]);
 
-      const [quote, historyRaw, sentimentRaw] = results.map(r => r.status === TECH.FULFILLED ? r.value : null);
+      const [quote, history, sentiment] = results.map(r => r.status === TECH.FULFILLED ? r.value : null);
 
-      if (historyRaw) {
-        const mappedHistory = this._mapAlphaVantageHistory(historyRaw);
-        await HistoricalDataDAO.insertMany(ticker, mappedHistory, PROVIDER.ALPHA_VANTAGE);
+      if (quote) {
+        // Persistiert den letzten Preis in der Ticker-Tabelle (Regel 1)
+        await TickerRepository.updateLastPrice(quote);
       }
 
-      if (sentimentRaw) {
-        const mappedSentiment = this._mapAlphaVantageSentiment(sentimentRaw, ticker);
-        await IntelligenceDAO.upsertSentiment(ticker, mappedSentiment);
+      if (history && history.length > 0) {
+        await HistoricalDataDAO.insertMany(ticker, history, PROVIDER.ALPHA_VANTAGE);
       }
 
-      return { quote, hasHistory: !!historyRaw };
+      if (sentiment) {
+        // Sentiment-Einträge müssen als Array übergeben werden (DAO-Vorgabe)
+        await IntelligenceDAO.insertSentiment(ticker, [sentiment]);
+      }
+
+      return { quote, hasHistory: !!history };
       
     } catch (error) {
-      Logger.error(`[StockService] Kritischer Fehler bei Ticker-Initialisierung (${ticker}): ${error.message}`);
-      throw error;
+      throw this._handleError(error, `InitializeTicker ${ticker}`);
     }
   }
 
   /**
    * Synchronisiert die Daten für das Intelligence Board (Aggregator).
    * @param {string} ticker - Das Symbol.
-   * @returns {Promise<Object>} - Kombiniertes Datenobjekt.
+   * @returns {Promise<Object>} - Kombiniertes Datenobjekt (DTO).
    */
   async getIntelligenceData(ticker) {
     try {
       // 1. STAMMDATEN & PREIS
       const quote = await this.getRealtimePrice(ticker);
+      
+      if (quote) {
+        // Auch bei Board-Anfrage den Preis persistieren
+        await TickerRepository.updateLastPrice(quote);
+      }
 
       // 2. HISTORISCHE DATEN (Hybrid-Logik: AV vs. Massive)
-      let history = await HistoricalDataDAO.getByTicker(ticker);
+      let history = await HistoricalDataDAO.getHistoryForChart(ticker);
       
       if (!history || history.length === 0) {
-        Logger.info(`[StockService] Keine Historie für ${ticker}. Hole 5 Jahre von AV...`);
-        const historyRaw = await this.alphaVantageRepo.getDailyHistory(ticker);
-        const mappedHistory = this._mapAlphaVantageHistory(historyRaw);
-        await HistoricalDataDAO.insertMany(ticker, mappedHistory, PROVIDER.ALPHA_VANTAGE);
-        history = mappedHistory;
+        Logger.info(`[StockService] Keine Historie für ${ticker}. Hole von AV...`);
+        history = await this.alphaVantageRepo.getDailyHistory(ticker);
+        if (history && history.length > 0) {
+          await HistoricalDataDAO.insertMany(ticker, history, PROVIDER.ALPHA_VANTAGE);
+        }
       }
 
-      // 3. FUNDAMENTALDATEN
-      let fundamentals = await IntelligenceDAO.getFundamentals(ticker);
-      if (!fundamentals || (Date.now() - fundamentals.last_updated > 2592000000)) { 
-        // Fundamentaldaten fehlen oder sind älter als 30 Tage -> AV fragen
+      // 3. FUNDAMENTALDATEN (Metadata)
+      let metadata = await IntelligenceDAO.getMetadata(ticker);
+      if (!metadata || (Date.now() - new Date(metadata.last_updated_fundamentals).getTime() > 2592000000)) { 
         Logger.info(`[StockService] Fundamentals für ${ticker} veraltet. Hole von AV...`);
-        const fundamentalsRaw = await this.alphaVantageRepo.getFundamentalsOverview(ticker);
-        const mappedFundamentals = this._mapAlphaVantageFundamentals(fundamentalsRaw);
-        await IntelligenceDAO.upsertFundamentals(ticker, mappedFundamentals);
-        fundamentals = mappedFundamentals;
+        const harmonizedFundamentals = await this.alphaVantageRepo.getFundamentalsOverview(ticker);
+        await IntelligenceDAO.upsertMetadata(ticker, harmonizedFundamentals);
+        metadata = harmonizedFundamentals;
       }
 
-      // 4. TECHNICALS (OBV)
-      let obvData = null;
-      try {
-        const obvRaw = await this.alphaVantageRepo.getOBV(ticker);
-        obvData = this._mapAlphaVantageOBV(obvRaw);
-      } catch (e) {
-        Logger.warn(`[StockService] OBV für ${ticker} nicht verfügbar.`);
-      }
+      // 4. SENTIMENT
+      const sentiment = await IntelligenceDAO.getLatestSentiment(ticker, 5);
 
+      // 5. TECHNICALS (OBV)
+      const obvResult = await this.alphaVantageRepo.getOBV(ticker).catch(() => null);
+
+      // 6. KORRELATIONEN (Peer-Assets)
+      const correlations = await IntelligenceDAO.getCorrelations(ticker);
+
+      // DTO für das Frontend zusammenbauen (Regel 11 & 13)
       return {
+        ticker: ticker,
+        currentPrice: quote ? quote.price : null,
+        change: quote ? quote.changePercent : 0,
         quote,
         history,
-        fundamentals,
-        indicators: { obv: obvData }
+        fundamentals: metadata,
+        sentiment,
+        correlations,
+        indicators: { obv: obvResult ? obvResult.data : null }
       };
 
     } catch (error) {
-      Logger.error(`[StockService] Fehler beim Laden der Intelligence-Daten (${ticker}): ${error.message}`);
-      throw error;
+      throw this._handleError(error, `IntelligenceData ${ticker}`);
     }
-  }
-
-  // --- PRIVATE MAPPING FUNKTIONEN (Clean Code: Separation of Concerns) ---
-
-  /**
-   * Transformiert die AlphaVantage Time Series in unser DB-Schema.
-   * @param {Object} rawData - Die Rohdaten von AV.
-   * @returns {Array<Object>} - Formatierte Historie.
-   * @private
-   */
-  _mapAlphaVantageHistory(rawData) {
-    const timeSeries = rawData['Time Series (Daily)'];
-    if (!timeSeries) return [];
-
-    return Object.keys(timeSeries).map(date => ({
-      date,
-      open: parseFloat(timeSeries[date]['1. open']),
-      high: parseFloat(timeSeries[date]['2. high']),
-      low: parseFloat(timeSeries[date]['3. low']),
-      close: parseFloat(timeSeries[date]['4. close']),
-      volume: parseInt(timeSeries[date]['6. volume'])
-    })).sort((a, b) => new Date(a.date) - new Date(b.date));
-  }
-
-  /**
-   * Transformiert AlphaVantage Sentiment in unser Schema.
-   * @param {Object} rawData - Rohdaten von AV.
-   * @param {string} ticker - Das Symbol.
-   * @returns {Object} - Mapped Sentiment.
-   * @private
-   */
-  _mapAlphaVantageSentiment(rawData, ticker) {
-    const feed = rawData.feed || [];
-    // Durchschnittliches Sentiment der Top 10 News berechnen
-    const relevantNews = feed.slice(0, 10);
-    const avgScore = relevantNews.reduce((sum, item) => {
-        const tickerData = item.ticker_sentiment.find(s => s.ticker === ticker);
-        return sum + (tickerData ? parseFloat(tickerData.ticker_sentiment_score) : 0);
-    }, 0) / (relevantNews.length || 1);
-
-    return {
-        score: parseFloat(avgScore.toFixed(4)),
-        news_count: feed.length,
-        last_news_title: relevantNews[0]?.title || MESSAGES.UI_NO_NEWS,
-        last_news_url: relevantNews[0]?.url || TECH.EMPTY_STRING,
-        timestamp: this._formatAVTimestamp(item.time_published),
-        provider: PROVIDER.ALPHA_VANTAGE
-    };
-  }
-
-  /**
-   * Hilfsfunktion zum Formatieren von AV Zeitstempeln (YYYYMMDDTHHMMSS -> ISO).
-   * @param {string} ts - AV Zeitstempel.
-   * @returns {string} - ISO Datum.
-   * @private
-   */
-  _formatAVTimestamp(ts) {
-    if (!ts) return new Date().toISOString();
-    // Beispiel: 20240315T153000 -> 2024-03-15T15:30:00Z
-    return `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}T${ts.slice(9, 11)}:${ts.slice(11, 13)}:${ts.slice(13, 15)}Z`;
-  }
-
-  /**
-   * Transformiert AlphaVantage OBV in unser Schema.
-   * @param {Object} rawData - Rohdaten von AV.
-   * @returns {Array<Object>} - OBV Zeitreihe.
-   * @private
-   */
-  _mapAlphaVantageOBV(rawData) {
-    const data = rawData['Technical Analysis: OBV'] || {};
-    return Object.keys(data).slice(0, 30).map(date => ({
-        date,
-        value: parseFloat(data[date]['OBV'])
-    })).reverse();
-  }
-
-  /**
-   * Transformiert AlphaVantage Company Overview in unser Schema.
-   * @param {Object} rawData - Rohdaten von AV.
-   * @returns {Object} - Fundamentaldaten.
-   * @private
-   */
-  _mapAlphaVantageFundamentals(rawData) {
-    return {
-        pe_ratio: parseFloat(rawData.PERatio) || 0,
-        eps: parseFloat(rawData.EPS) || 0,
-        market_cap: parseInt(rawData.MarketCapitalization) || 0,
-        dividend_yield: parseFloat(rawData.DividendYield) || 0,
-        beta: parseFloat(rawData.Beta) || 0,
-        revenue_ttm: parseInt(rawData.RevenueTTM) || 0,
-        gross_profit_ttm: parseInt(rawData.GrossProfitTTM) || 0,
-        last_updated: Date.now()
-    };
   }
 }
 

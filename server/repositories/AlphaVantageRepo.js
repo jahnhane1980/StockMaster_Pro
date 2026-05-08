@@ -1,6 +1,7 @@
 // server/repositories/AlphaVantageRepo.js
 const axios = require('axios');
 const requestManager = require('../services/RequestManager');
+const MarketDataMapper = require('../utils/MarketDataMapper');
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
 const MESSAGES = require('../utils/Messages');
@@ -58,76 +59,180 @@ class AlphaVantageRepo {
   }
 
   /**
-   * Holt historische Tagesdaten (Wichtig für neue Ticker -> Prio: P2).
+   * Holt den aktuellen Kurs via GLOBAL_QUOTE (Prio: P1/P2).
    * @param {string} ticker - Das Aktiensymbol.
-   * @returns {Promise<Object|null>} - Die Zeitreihendaten.
+   * @returns {Promise<Object|null>} - Das harmonisierte Kurs-Objekt.
+   */
+  async getRealtimeQuote(ticker) {
+    const task = async () => {
+      const rawData = await this._fetchFromAPI({
+        function: 'GLOBAL_QUOTE',
+        symbol: ticker
+      });
+      const quote = rawData['Global Quote'];
+      if (!quote || Object.keys(quote).length === 0) return null;
+
+      // Nutzt den zentralen Mapper (Regel 1)
+      return MarketDataMapper.toQuote(
+        quote['01. symbol'],
+        quote['05. price'],
+        quote['02. open'],
+        quote['06. volume'],
+        quote['07. latest trading day']
+      );
+    };
+
+    Logger.info(`[AlphaVantageRepo] Queueing Global Quote for ${ticker} (${PRIORITY.IMPORTANT})`);
+    return requestManager.enqueue(PRIORITY.IMPORTANT, this.providerName, task);
+  }
+
+  /**
+   * Holt historische Tagesdaten (Wichtig für neue Ticker -> Prio: P2).
+   * Gibt nun eine Liste harmonisierter Modelle zurück.
+   * @param {string} ticker - Das Aktiensymbol.
+   * @returns {Promise<Array<Object>>} - Die harmonisierten Zeitreihendaten.
    */
   async getDailyHistory(ticker) {
-    const task = () => this._fetchFromAPI({
-      function: 'TIME_SERIES_DAILY_ADJUSTED',
-      symbol: ticker,
-      outputsize: 'full' // 'full' holt bis zu 20 Jahre, 'compact' nur 100 Tage.
-    });
+    const task = async () => {
+      const rawData = await this._fetchFromAPI({
+        function: 'TIME_SERIES_DAILY_ADJUSTED',
+        symbol: ticker,
+        outputsize: 'full'
+      });
 
-    Logger.info(`[AlphaVantageRepo] Queueing History for ${ticker} (${PRIORITY.IMPORTANT})`);
+      const timeSeries = rawData['Time Series (Daily)'];
+      if (!timeSeries) return [];
+
+      return Object.keys(timeSeries).map(date => {
+        const entry = timeSeries[date];
+        // Nutzt den zentralen Mapper (Regel 1)
+        return MarketDataMapper.toHistoryEntry(
+          ticker,
+          date,
+          entry['1. open'],
+          entry['2. high'],
+          entry['3. low'],
+          entry['4. close'],
+          entry['6. volume']
+        );
+      }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    };
+
+    Logger.info(`[AlphaVantageRepo] Queueing Harmonized History for ${ticker} (${PRIORITY.IMPORTANT})`);
     return requestManager.enqueue(PRIORITY.IMPORTANT, this.providerName, task);
   }
 
   /**
    * Holt das News Sentiment (Hintergrund-Task -> Prio: P3).
    * @param {string} ticker - Das Aktiensymbol.
-   * @returns {Promise<Object|null>} - Sentiment-Daten und News-Links.
+   * @returns {Promise<Object|null>} - Harmonisiertes Sentiment-Modell.
    */
   async getNewsSentiment(ticker) {
-    const task = () => this._fetchFromAPI({
-      function: 'NEWS_SENTIMENT',
-      tickers: ticker,
-      limit: 50 // Holt die letzten 50 relevanten News
-    });
+    const task = async () => {
+      const rawData = await this._fetchFromAPI({
+        function: 'NEWS_SENTIMENT',
+        tickers: ticker,
+        limit: 50
+      });
+      
+      const feed = rawData.feed || [];
+      const relevantNews = feed.slice(0, 10);
+      const avgScore = relevantNews.reduce((sum, item) => {
+        const tickerData = item.ticker_sentiment?.find(s => s.ticker === ticker);
+        return sum + (tickerData ? parseFloat(tickerData.ticker_sentiment_score) : 0);
+      }, 0) / (relevantNews.length || 1);
 
-    Logger.info(`[AlphaVantageRepo] Queueing Sentiment for ${ticker} (${PRIORITY.BACKGROUND})`);
+      return {
+        sentiment_score: parseFloat(avgScore.toFixed(4)),
+        relevance_score: 1.0,
+        news_count: feed.length,
+        last_news_title: relevantNews[0]?.title || 'Keine News verfügbar',
+        last_news_url: relevantNews[0]?.url || '',
+        timestamp: this._formatTimestamp(relevantNews[0]?.time_published),
+        provider: PROVIDER.ALPHA_VANTAGE
+      };
+    };
+
+    Logger.info(`[AlphaVantageRepo] Queueing Harmonized Sentiment for ${ticker} (${PRIORITY.BACKGROUND})`);
     return requestManager.enqueue(PRIORITY.BACKGROUND, this.providerName, task);
   }
 
   /**
    * Holt Fundamentaldaten: Company Overview (Hintergrund-Task -> Prio: P3).
    * @param {string} ticker - Das Aktiensymbol.
-   * @returns {Promise<Object|null>} - Unternehmensprofil und Kennzahlen.
+   * @returns {Promise<Object|null>} - Harmonisiertes Metadaten-Modell.
    */
   async getFundamentalsOverview(ticker) {
-    return this.getCompanyOverview(ticker);
+    const task = async () => {
+      const rawData = await this._fetchFromAPI({
+        function: 'OVERVIEW',
+        symbol: ticker
+      });
+
+      return {
+        ticker: ticker,
+        market_cap: parseInt(rawData.MarketCapitalization) || 0,
+        debt_equity: parseFloat(rawData.DebtToEquityRatio) || 0,
+        revenue_growth: parseFloat(rawData.RevenueGrowthYOY) || 0,
+        pe_ratio: parseFloat(rawData.PERatio) || 0,
+        eps: parseFloat(rawData.EPS) || 0,
+        dividend_yield: parseFloat(rawData.DividendYield) || 0,
+        beta: parseFloat(rawData.Beta) || 0,
+        last_updated_fundamentals: new Date().toISOString()
+      };
+    };
+
+    Logger.info(`[AlphaVantageRepo] Queueing Harmonized Fundamentals for ${ticker} (${PRIORITY.BACKGROUND})`);
+    return requestManager.enqueue(PRIORITY.BACKGROUND, this.providerName, task);
   }
 
   /**
-   * Alias für getFundamentalsOverview (Hintergrund-Task -> Prio: P3).
-   * @param {string} ticker - Das Aktiensymbol.
-   * @returns {Promise<Object|null>} - Unternehmensprofil.
+   * Alias für getFundamentalsOverview.
    */
   async getCompanyOverview(ticker) {
-    const task = () => this._fetchFromAPI({
-      function: 'OVERVIEW',
-      symbol: ticker
-    });
-
-    Logger.info(`[AlphaVantageRepo] Queueing Company Overview for ${ticker} (${PRIORITY.BACKGROUND})`);
-    return requestManager.enqueue(PRIORITY.BACKGROUND, this.providerName, task);
+    return this.getFundamentalsOverview(ticker);
   }
 
   /**
    * Holt technische Indikatoren: On-Balance Volume (Hintergrund -> Prio: P3).
    * @param {string} ticker - Das Aktiensymbol.
    * @param {string} [interval='daily'] - Zeitintervall.
-   * @returns {Promise<Object|null>} - OBV-Zeitreihe.
+   * @returns {Promise<Object|null>} - Harmonisierte OBV-Zeitreihe.
    */
   async getOBV(ticker, interval = 'daily') {
-    const task = () => this._fetchFromAPI({
-      function: 'OBV',
-      symbol: ticker,
-      interval: interval
-    });
+    const task = async () => {
+      const rawData = await this._fetchFromAPI({
+        function: 'OBV',
+        symbol: ticker,
+        interval: interval
+      });
 
-    Logger.info(`[AlphaVantageRepo] Queueing OBV for ${ticker} (${PRIORITY.BACKGROUND})`);
+      const data = rawData['Technical Analysis: OBV'] || {};
+      const obvList = Object.keys(data).slice(0, 30).map(date => ({
+        date,
+        value: parseFloat(data[date]['OBV'])
+      })).reverse();
+
+      return {
+        ticker: ticker,
+        indicator: 'OBV',
+        data: obvList
+      };
+    };
+
+    Logger.info(`[AlphaVantageRepo] Queueing Harmonized OBV for ${ticker} (${PRIORITY.BACKGROUND})`);
     return requestManager.enqueue(PRIORITY.BACKGROUND, this.providerName, task);
+  }
+
+  /**
+   * Hilfsfunktion zum Formatieren von AV Zeitstempeln (YYYYMMDDTHHMMSS -> ISO).
+   * @param {string} ts - AV Zeitstempel.
+   * @returns {string} - ISO Datum.
+   * @private
+   */
+  _formatTimestamp(ts) {
+    if (!ts) return new Date().toISOString();
+    return `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}T${ts.slice(9, 11)}:${ts.slice(11, 13)}:${ts.slice(13, 15)}Z`;
   }
 }
 

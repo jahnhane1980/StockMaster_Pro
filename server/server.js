@@ -90,10 +90,10 @@ app.get('/api/fundamentals/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     try {
         const data = await RequestManager.enqueue("P3", "AV", () => RepoFactory.getAlphaVantageRepo().getCompanyOverview(symbol));
-        res.json(data);
+        res.json({ success: true, data, error: null });
     } catch (err) {
         Logger.error(`[Server] Fehler bei Fundamentaldaten-Abruf für ${symbol}: ${err.message}`);
-        res.status(500).json({ error: "Fehler beim Abruf der Fundamentaldaten." });
+        res.status(500).json({ success: false, data: null, error: "Fehler beim Abruf der Fundamentaldaten." });
     }
 });
 
@@ -117,10 +117,11 @@ app.post('/api/correlations', (req, res) => WatchlistController.addCorrelation(r
  */
 app.get('/api/tickers', (req, res) => {
     try {
-        res.json(TickerRepository.getAllTickers());
+        const data = TickerRepository.getAllTickers();
+        res.json({ success: true, data, error: null });
     } catch (err) {
         Logger.error(`[Server] Fehler beim Laden der Watchlist: ${err.message}`);
-        res.status(500).json({ error: "Fehler beim Laden der Watchlist." });
+        res.status(500).json({ success: false, data: null, error: "Fehler beim Laden der Watchlist." });
     }
 });
 
@@ -133,10 +134,10 @@ app.get('/api/tickers', (req, res) => {
 app.delete('/api/tickers/:symbol', (req, res) => {
     try {
         TickerRepository.deleteTicker(req.params.symbol.toUpperCase());
-        res.json({ success: true });
+        res.json({ success: true, data: null, error: null });
     } catch (err) {
         Logger.error(`[Server] Fehler beim Löschen von ${req.params.symbol}: ${err.message}`);
-        res.status(500).json({ error: "Fehler beim Löschen des Tickers." });
+        res.status(500).json({ success: false, data: null, error: "Fehler beim Löschen des Tickers." });
     }
 });
 

@@ -1,6 +1,7 @@
 // server/repositories/MassiveRepo.js
 const axios = require('axios');
 const requestManager = require('../services/RequestManager');
+const MarketDataMapper = require('../utils/MarketDataMapper');
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
 const { PRIORITY, PROVIDER, API, INTERNAL_ERR } = require('../utils/AppConstants');
@@ -47,13 +48,22 @@ class MassiveRepo {
 
   /**
    * Holt den absoluten Echtzeit-Kurs für das Board (Höchste Prio: P1).
+   * Nutzt nun den Aggregat-Endpunkt für den letzten Handelstag (Regel 15).
    * @param {string} ticker - Das Aktiensymbol.
-   * @returns {Promise<Object|null>} - Das aktuelle Kurs-Objekt.
+   * @returns {Promise<Object|null>} - Das harmonisierte Kurs-Objekt.
    */
   async getRealtimeQuote(ticker) {
-    const task = () => this._fetchFromAPI(`/stocks/${ticker}/quote`);
+    const symbol = ticker.toUpperCase();
+    const task = async () => {
+      const rawData = await this._fetchFromAPI(`/v2/aggs/ticker/${symbol}/prev`);
+      if (!rawData || !rawData.results || rawData.results.length === 0) return null;
+      
+      const result = rawData.results[0];
+      // Nutzt den zentralen Mapper (Regel 1)
+      return MarketDataMapper.toQuote(symbol, result.c, result.o, result.v, result.t);
+    };
 
-    Logger.info(`[MassiveRepo] Queueing Realtime Quote for ${ticker} (${PRIORITY.CRITICAL})`);
+    Logger.info(`[MassiveRepo] Queueing Realtime Quote (v2) for ${symbol} (${PRIORITY.CRITICAL})`);
     return requestManager.enqueue(PRIORITY.CRITICAL, this.providerName, task);
   }
 

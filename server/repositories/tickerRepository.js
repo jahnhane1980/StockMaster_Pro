@@ -49,6 +49,22 @@ const TickerRepository = {
      */
     deleteTicker: (symbol) => {
         return WatchlistDAO.delete(symbol);
+    },
+
+    /**
+     * Aktualisiert den letzten Preis in der Datenbank (Regel 1).
+     * @param {Object} quote - Das harmonisierte Quote-Objekt.
+     * @param {string} quote.symbol - Das Aktiensymbol.
+     * @param {number} quote.price - Der aktuelle Kurs.
+     * @param {number} quote.volume - Das Handelsvolumen.
+     * @param {number} quote.change - Die absolute Änderung.
+     * @param {number} quote.changePercent - Die prozentuale Änderung.
+     * @param {string} quote.timestamp - Der ISO-Zeitstempel.
+     * @returns {Object} - Das Ergebnis der DAO-Operation.
+     */
+    updateLastPrice: (quote) => {
+        if (!quote || !quote.symbol) return null;
+        return WatchlistDAO.updatePrice(quote.symbol, quote.price, quote.changePercent);
     }
 };
 
