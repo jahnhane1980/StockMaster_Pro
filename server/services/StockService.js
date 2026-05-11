@@ -1,10 +1,4 @@
 // server/services/StockService.js
-const RepoFactory = require('../repositories/RepoFactory');
-const TickerRepository = require('../repositories/TickerRepository');
-const RequestManager = require('./RequestManager');
-const HistoricalDataDAO = require('../models/HistoricalDataDAO');
-const IntelligenceDAO = require('../models/IntelligenceDAO');
-const Logger = require('../utils/Logger');
 const MESSAGES = require('../utils/Messages');
 const { StockMasterError, ProviderLimitError, ResourceNotFoundError } = require('../utils/Errors');
 const { PRIORITY, PROVIDER, TECH, CONFIG } = require('../utils/AppConstants');
@@ -15,37 +9,49 @@ const { PRIORITY, PROVIDER, TECH, CONFIG } = require('../utils/AppConstants');
  * Er verwaltet die Fallback-Hierarchie zwischen Providern und harmonisiert Fehler.
  */
 class StockService {
-  constructor() {
-    this.alphaVantageRepo = RepoFactory.getAlphaVantageRepo();
-    this.massiveRepo = RepoFactory.getMassiveRepo();
+  /**
+   * Erstellt eine Instanz des StockService.
+   * @param {Object} avMarketDataRepo - Repository für AV Kursdaten.
+   * @param {Object} avIntelligenceRepo - Repository für AV Sentiment.
+   * @param {Object} avFundamentalRepo - Repository für AV Fundamentals.
+   * @param {Object} massiveRepo - Repository für Massive.
+   * @param {Object} tickerRepository - Repository für Ticker-Stammdaten.
+   * @param {Object} historicalDataDAO - DAO für historische Daten.
+   * @param {Object} intelligenceDAO - DAO für Intelligence-Daten.
+   * @param {Object} logger - Logger-Instanz.
+   * @param {Object} requestManager - Der RequestManager für Queueing.
+   */
+  constructor(avMarketDataRepo, avIntelligenceRepo, avFundamentalRepo, massiveRepo, tickerRepository, historicalDataDAO, intelligenceDAO, logger, requestManager) {
+    this.avMarketDataRepo = avMarketDataRepo;
+    this.avIntelligenceRepo = avIntelligenceRepo;
+    this.avFundamentalRepo = avFundamentalRepo;
+    this.massiveRepo = massiveRepo;
+    this.tickerRepository = tickerRepository;
+    this.historicalDataDAO = historicalDataDAO;
+    this.intelligenceDAO = intelligenceDAO;
+    this.logger = logger;
+    this.requestManager = requestManager;
   }
 
   /**
    * Zentraler Error-Mapper (Regel 12).
-   * Übersetzt Provider-Fehler in ein einheitliches App-Format.
-   * @param {Error} error - Der ursprüngliche Fehler.
-   * @param {string} context - Kontext der Operation.
-   * @private
    */
   _handleError(error, context) {
-    Logger.error(`[StockService] ${context}: ${error.message}`);
+    this.logger.error(`[StockService] ${context}: ${error.message}`);
     
     if (error instanceof ProviderLimitError || error instanceof ResourceNotFoundError) {
       return error;
     }
     
-    // Fallback auf Standard-Fehler
-    return new StockMasterError(`${MESSAGES.ERR_INTERNAL} (${context})`, 500);
+    return new StockMasterError(`${MESSAGES.ERR_INTERNAL_SERVER} (${context})`, 500);
   }
 
   /**
-   * Holt den Echtzeit-Preis über den RequestManager (Massive P1).
-   * @param {string} symbol - Das Aktiensymbol.
-   * @returns {Promise<Object|null>} - Das aktuelle harmonisierte Preis-Objekt.
+   * Holt den Echtzeit-Preis.
    */
   async getRealtimePrice(symbol) {
     try {
-      return await RequestManager.enqueue(PRIORITY.CRITICAL, PROVIDER.MASSIVE, () => this.massiveRepo.getRealtimeQuote(symbol));
+      return await this.requestManager.enqueue(PRIORITY.CRITICAL, PROVIDER.MASSIVE, () => this.massiveRepo.getRealtimeQuote(symbol));
     } catch (e) {
       throw this._handleError(e, `RealtimePrice ${symbol}`);
     }
@@ -53,59 +59,65 @@ class StockService {
 
   /**
    * Synchronisiert einen Ticker (Hintergrund-Task).
-   * Prüft ob ein Full-Sync oder ein inkrementelles Update (Diff) nötig ist.
-   * @param {string} ticker - Das Symbol.
    */
   async syncTickerData(ticker) {
     try {
-      const lastDate = await HistoricalDataDAO.getLastRecordDate(ticker);
+      const lastDate = await this.historicalDataDAO.getLastRecordDate(ticker);
       
       if (!lastDate) {
-        Logger.info(`[StockService] Starte Full-Sync für ${ticker}`);
+        this.logger.info(`[StockService] Starte Full-Sync für ${ticker}`);
         return await this.initializeTicker(ticker);
       }
 
-      Logger.info(`[StockService] Starte inkrementelles Update für ${ticker} (ab ${lastDate})`);
-      // Hier könnte später die Massive-Diff-Logik folgen. Aktuell priorisieren wir initializeTicker.
+      this.logger.info(`[StockService] Starte inkrementelles Update für ${ticker} (ab ${lastDate})`);
       return await this.initializeTicker(ticker);
     } catch (e) {
-      Logger.error(`[StockService] Sync-Fehler für ${ticker}: ${e.message}`);
+      this.logger.error(`[StockService] Sync-Fehler für ${ticker}: ${e.message}`);
     }
   }
 
   /**
    * Initialisiert einen neuen Ticker im System (Regel 11).
-   * Führt einen Full-Sync der Daten durch.
-   * @param {string} ticker - Das Symbol.
+   * Holt alle Basisdaten von den Providern parallel.
    */
   async initializeTicker(ticker) {
+    this.logger.info(`[StockService] Initiating parallel data fetch for ${ticker}`);
     try {
-      Logger.info(`[StockService] Initialisiere Ticker: ${ticker}`);
-      
-      // Nutzt ausschließlich harmonisierte Repository-Methoden (Regel 1)
+      // 1. Parallel fetch from all four repositories (Regel 27.2)
       const results = await Promise.allSettled([
-        this.getRealtimePrice(ticker),
-        this.alphaVantageRepo.getDailyHistory(ticker),
-        this.alphaVantageRepo.getNewsSentiment(ticker)
+        this.avMarketDataRepo.getDailyHistory(ticker),
+        this.avIntelligenceRepo.getNewsSentiment(ticker),
+        this.avFundamentalRepo.getFundamentalsOverview(ticker),
+        this.getRealtimePrice(ticker)
       ]);
 
-      const [quote, history, sentiment] = results.map(r => r.status === TECH.FULFILLED ? r.value : null);
+      // 2. Destructuring der Ergebnisse mit Fallback (Robustheit)
+      const [marketData, intelligenceData, fundamentalData, massiveData] = results.map(r => 
+        r.status === TECH.FULFILLED ? r.value : null
+      );
 
-      if (quote) {
-        // Persistiert den letzten Preis in der Ticker-Tabelle (Regel 1)
-        await TickerRepository.updateLastPrice(quote);
+      // 3. Persistierung (Parallel, sofern Daten vorhanden)
+      const persistenceTasks = [];
+
+      if (massiveData) {
+        persistenceTasks.push(this.tickerRepository.updateLastPrice(massiveData));
       }
 
-      if (history && history.length > 0) {
-        await HistoricalDataDAO.insertMany(ticker, history, PROVIDER.ALPHA_VANTAGE);
+      if (marketData && marketData.length > 0) {
+        persistenceTasks.push(this.historicalDataDAO.insertMany(ticker, marketData, PROVIDER.ALPHA_VANTAGE));
       }
 
-      if (sentiment) {
-        // Sentiment-Einträge müssen als Array übergeben werden (DAO-Vorgabe)
-        await IntelligenceDAO.insertSentiment(ticker, [sentiment]);
+      if (intelligenceData) {
+        persistenceTasks.push(this.intelligenceDAO.insertSentiment(ticker, [intelligenceData]));
       }
 
-      return { quote, hasHistory: !!history };
+      if (fundamentalData) {
+        persistenceTasks.push(this.intelligenceDAO.upsertMetadata(ticker, fundamentalData));
+      }
+
+      await Promise.allSettled(persistenceTasks);
+
+      return { marketData, intelligenceData, fundamentalData, massiveData };
       
     } catch (error) {
       throw this._handleError(error, `InitializeTicker ${ticker}`);
@@ -114,49 +126,56 @@ class StockService {
 
   /**
    * Synchronisiert die Daten für das Intelligence Board (Aggregator).
-   * @param {string} ticker - Das Symbol.
-   * @returns {Promise<Object>} - Kombiniertes Datenobjekt (DTO).
+   * Optimiert auf parallele Abfragen für maximale Performance.
    */
   async getIntelligenceData(ticker) {
+    this.logger.info(`[StockService] Initiating parallel data fetch for ${ticker}`);
     try {
-      // 1. STAMMDATEN & PREIS
-      const quote = await this.getRealtimePrice(ticker);
+      // 1. Parallel fetch from DB and non-conditional API calls (OBV/Price)
+      const [massiveData, dbHistory, dbMetadata, sentiment, correlations, obvResult] = await Promise.allSettled([
+        this.getRealtimePrice(ticker),
+        this.historicalDataDAO.getHistoryForChart(ticker),
+        this.intelligenceDAO.getMetadata(ticker),
+        this.intelligenceDAO.getLatestSentiment(ticker, 5),
+        this.intelligenceDAO.getCorrelations(ticker),
+        this.avFundamentalRepo.getOBV(ticker)
+      ]);
+
+      // Helper zum Extrahieren der Werte
+      const getVal = (res, fallback = null) => res.status === TECH.FULFILLED ? res.value : fallback;
+
+      const quote = getVal(massiveData);
+      const obvData = getVal(obvResult);
       
       if (quote) {
-        // Auch bei Board-Anfrage den Preis persistieren
-        await TickerRepository.updateLastPrice(quote);
+        this.tickerRepository.updateLastPrice(quote).catch(e => this.logger.error(e.message));
       }
 
-      // 2. HISTORISCHE DATEN (Hybrid-Logik: AV vs. Massive)
-      let history = await HistoricalDataDAO.getHistoryForChart(ticker);
-      
-      if (!history || history.length === 0) {
-        Logger.info(`[StockService] Keine Historie für ${ticker}. Hole von AV...`);
-        history = await this.alphaVantageRepo.getDailyHistory(ticker);
-        if (history && history.length > 0) {
-          await HistoricalDataDAO.insertMany(ticker, history, PROVIDER.ALPHA_VANTAGE);
+      // 2. Conditional Fallbacks (Parallel falls beide fehlen)
+      let history = getVal(dbHistory, []);
+      let metadata = getVal(dbMetadata);
+
+      const needsHistory = !history || history.length === 0;
+      const needsMetadata = !metadata || (Date.now() - new Date(metadata.last_updated_fundamentals).getTime() > CONFIG.CACHE_DURATION_MS);
+
+      if (needsHistory || needsMetadata) {
+        this.logger.info(`[StockService] Fetching missing/stale data from AV for ${ticker}`);
+        const [freshHistory, freshMetadata] = await Promise.allSettled([
+          needsHistory ? this.avMarketDataRepo.getDailyHistory(ticker) : Promise.resolve(null),
+          needsMetadata ? this.avFundamentalRepo.getFundamentalsOverview(ticker) : Promise.resolve(null)
+        ]);
+
+        if (getVal(freshHistory)) {
+          history = freshHistory.value;
+          this.historicalDataDAO.insertMany(ticker, history, PROVIDER.ALPHA_VANTAGE).catch(e => this.logger.error(e.message));
+        }
+        if (getVal(freshMetadata)) {
+          metadata = freshMetadata.value;
+          this.intelligenceDAO.upsertMetadata(ticker, metadata).catch(e => this.logger.error(e.message));
         }
       }
 
-      // 3. FUNDAMENTALDATEN (Metadata)
-      let metadata = await IntelligenceDAO.getMetadata(ticker);
-      if (!metadata || (Date.now() - new Date(metadata.last_updated_fundamentals).getTime() > CONFIG.CACHE_DURATION_MS)) { 
-        Logger.info(`[StockService] Fundamentals für ${ticker} veraltet. Hole von AV...`);
-        const harmonizedFundamentals = await this.alphaVantageRepo.getFundamentalsOverview(ticker);
-        await IntelligenceDAO.upsertMetadata(ticker, harmonizedFundamentals);
-        metadata = harmonizedFundamentals;
-      }
-
-      // 4. SENTIMENT
-      const sentiment = await IntelligenceDAO.getLatestSentiment(ticker, 5);
-
-      // 5. TECHNICALS (OBV)
-      const obvResult = await this.alphaVantageRepo.getOBV(ticker).catch(() => null);
-
-      // 6. KORRELATIONEN (Peer-Assets)
-      const correlations = await IntelligenceDAO.getCorrelations(ticker);
-
-      // DTO für das Frontend zusammenbauen (Regel 11 & 13)
+      // 3. DTO zusammenbauen
       return {
         ticker: ticker,
         currentPrice: quote ? quote.price : null,
@@ -164,9 +183,9 @@ class StockService {
         quote,
         history,
         fundamentals: metadata,
-        sentiment,
-        correlations,
-        indicators: { obv: obvResult ? obvResult.data : null }
+        sentiment: getVal(sentiment, []),
+        correlations: getVal(correlations, []),
+        indicators: { obv: obvData ? obvData.data : null }
       };
 
     } catch (error) {
@@ -175,4 +194,4 @@ class StockService {
   }
 }
 
-module.exports = new StockService();
+module.exports = StockService;

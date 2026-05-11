@@ -4,7 +4,7 @@ const requestManager = require('../services/RequestManager');
 const MarketDataMapper = require('../utils/MarketDataMapper');
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
-const { PRIORITY, PROVIDER, API, INTERNAL_ERR, TECH } = require('../utils/AppConstants');
+const { PRIORITY, PROVIDER, API, INTERNAL_ERR, TECH, LOG } = require('../utils/AppConstants');
 
 /**
  * Repository für den Zugriff auf die Massive API (Hochverfügbare Marktdaten).
@@ -21,10 +21,14 @@ class MassiveRepo {
    * Hilfsfunktion für den eigentlichen API-Call an Massive.
    * @param {string} endpoint - Der API-Endpunkt.
    * @param {Object} [params={}] - Optionale Query-Parameter.
+   * @param {string} [symbol='N/A'] - Das Symbol für das Logging.
    * @returns {Promise<Object|null>} - Die Antwortdaten der API.
    * @private
    */
-  async _fetchFromAPI(endpoint, params = {}) {
+  async _fetchFromAPI(endpoint, params = {}, symbol = 'N/A') {
+    const className = 'MassiveRepo';
+    Logger.info(`[${className}] Requesting ${endpoint} for ${symbol}...`);
+
     try {
       const response = await axios.get(`${this.baseUrl}${endpoint}`, {
         params,
@@ -34,8 +38,12 @@ class MassiveRepo {
         }
       });
 
+      Logger.info(`[${className}] Response Received - Status: ${response.status}`);
       return response.data;
     } catch (error) {
+      const statusCode = error.response ? error.response.status : 'N/A';
+      Logger.error(`[${className}] API Error for ${symbol} - Status: ${statusCode} - Error: ${error.message}`);
+      
       if (error.response && error.response.status === HttpStatus.TOO_MANY_REQUESTS) {
         throw new Error(INTERNAL_ERR.MASSIVE_LIMIT);
       }
@@ -51,8 +59,9 @@ class MassiveRepo {
    */
   async getRealtimeQuote(ticker) {
     const symbol = ticker.toUpperCase();
+    const endpoint = `/v2/aggs/ticker/${symbol}/prev`;
     const task = async () => {
-      const rawData = await this._fetchFromAPI(`/v2/aggs/ticker/${symbol}/prev`);
+      const rawData = await this._fetchFromAPI(endpoint, {}, symbol);
       if (!rawData || !rawData.results || rawData.results.length === 0) return null;
       
       const result = rawData.results[0];
@@ -61,6 +70,7 @@ class MassiveRepo {
     };
 
     Logger.info(`[MassiveRepo] Queueing Realtime Quote (v2) for ${symbol} (${PRIORITY.CRITICAL})`);
+    Logger.info(LOG.TRACE.REPO_HANDOVER, symbol, requestManager.getQueueSize());
     return requestManager.enqueue(PRIORITY.CRITICAL, this.providerName, task);
   }
 
@@ -70,11 +80,14 @@ class MassiveRepo {
    * @returns {Promise<Object|null>} - Die Intraday-Zeitreihe.
    */
   async getIntradayData(ticker) {
-    const task = () => this._fetchFromAPI(`/stocks/${ticker}/intraday`, {
+    const symbol = ticker.toUpperCase();
+    const endpoint = `/stocks/${symbol}/intraday`;
+    const task = () => this._fetchFromAPI(endpoint, {
       interval: API.MASSIVE_PARAMS.INTERVAL_5M // 5-Minuten Kerzen für den heutigen Tag
-    });
+    }, symbol);
 
-    Logger.info(`[MassiveRepo] Queueing Intraday Data for ${ticker} (${PRIORITY.CRITICAL})`);
+    Logger.info(`[MassiveRepo] Queueing Intraday Data for ${symbol} (${PRIORITY.CRITICAL})`);
+    Logger.info(LOG.TRACE.REPO_HANDOVER, symbol, requestManager.getQueueSize());
     return requestManager.enqueue(PRIORITY.CRITICAL, this.providerName, task);
   }
 
@@ -87,13 +100,16 @@ class MassiveRepo {
    * @returns {Promise<Object|null>} - Die historischen Kursdaten.
    */
   async getHistoricalData(ticker, fromDate, toDate) {
-    const task = () => this._fetchFromAPI(`/stocks/${ticker}/history`, {
+    const symbol = ticker.toUpperCase();
+    const endpoint = `/stocks/${symbol}/history`;
+    const task = () => this._fetchFromAPI(endpoint, {
       from: fromDate,
       to: toDate,
       interval: API.MASSIVE_PARAMS.INTERVAL_1D
-    });
+    }, symbol);
 
-    Logger.info(`[MassiveRepo] Queueing History Diff for ${ticker} (${fromDate} to ${toDate}) (${PRIORITY.CRITICAL})`);
+    Logger.info(`[MassiveRepo] Queueing History Diff for ${symbol} (${fromDate} to ${toDate}) (${PRIORITY.CRITICAL})`);
+    Logger.info(LOG.TRACE.REPO_HANDOVER, symbol, requestManager.getQueueSize());
     return requestManager.enqueue(PRIORITY.CRITICAL, this.providerName, task);
   }
 }

@@ -20,6 +20,7 @@ const MESSAGES = Object.freeze({
   ERR_INSUFFICIENT_DATA: 'Unzureichende historische Daten für das Haupt-Symbol.',
   ERR_MISSING_TICKERS: 'Haupt-Ticker oder verknüpfter Ticker fehlt.',
   ERR_INVALID_SCORE: 'Score muss eine Zahl zwischen -1 und 1 sein.',
+  ERR_QUEUE_FULL: 'Warteschlange ist voll. Bitte später versuchen.',
   
   // Generic Server Errors
   ERR_INTERNAL_SERVER: 'Interner Serverfehler.',

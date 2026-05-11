@@ -1,7 +1,7 @@
-// server/services/RequestManager.js
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
-const { PRIORITY, PROVIDER, INTERNAL_ERR, CONFIG } = require('../utils/AppConstants');
+const Messages = require('../utils/Messages');
+const { PRIORITY, PROVIDER, INTERNAL_ERR, CONFIG, LOG } = require('../utils/AppConstants');
 
 /**
  * Zentraler Manager für alle ausgehenden API-Anfragen an externe Provider.
@@ -25,12 +25,18 @@ class RequestManager {
     this.avRequestsToday = 0; 
     this.avRequestsPerMinute = CONFIG.REQUEST_MANAGER.MINUTE_API_LIMIT;
     this.avRequestsThisMinute = 0;
+    this.rateLimitWindow = CONFIG.REQUEST_MANAGER.RESET_INTERVAL;
     
     // Status
     this.isProcessing = false;
+    this.requestIdCounter = 0;
+    this._isRateLimited = false; // Flag für aktive Wartezeit
     
     // Reset Timer für das Minutenlimit (60 Sek)
-    setInterval(() => { this.avRequestsThisMinute = 0; }, CONFIG.REQUEST_MANAGER.RESET_INTERVAL); 
+    this.resetTimer = setInterval(() => { this.avRequestsThisMinute = 0; }, this.rateLimitWindow); 
+
+    // Heartbeat-Log
+    setInterval(() => this._heartbeat(), 5000);
   }
 
   /**
@@ -46,10 +52,15 @@ class RequestManager {
       // Memory-Schutz: Queue-Größe prüfen
       if (this.queues[priority].length >= CONFIG.REQUEST_MANAGER.MAX_QUEUE_SIZE) {
         Logger.error(`[RequestManager] Queue ${priority} voll (${CONFIG.REQUEST_MANAGER.MAX_QUEUE_SIZE}). Task verworfen.`);
-        return reject(new Error(`Queue ${priority} ist voll. Bitte später versuchen.`));
+        return reject(new Error(Messages.ERR_QUEUE_FULL));
       }
 
+      const id = ++this.requestIdCounter;
+      const queueSize = this.getQueueSize();
+      Logger.info(LOG.TRACE.QUEUE_RECEIVED, priority, id, queueSize + 1);
+
       this.queues[priority].push({
+        id,
         priority, 
         provider,
         taskFn,
@@ -58,6 +69,7 @@ class RequestManager {
         retries: 0 // Initialer Retry-Zähler
       });
       
+      Logger.info(LOG.DEBUG.CALLING_PROC, typeof this, this.isProcessing);
       this.processQueue();
     });
   }
@@ -69,85 +81,133 @@ class RequestManager {
    * @private
    */
   async processQueue() {
-    if (this.isProcessing) return;
+    Logger.info(LOG.DEBUG.ENTERED_PROC, typeof this);
     
-    // Wir suchen den nächsten ausführbaren Task
-    let nextTask = null;
-    let queueUsed = null;
-
-    // Prioritäten: PRIORITY.CRITICAL > PRIORITY.IMPORTANT > PRIORITY.BACKGROUND
-    for (const p of [PRIORITY.CRITICAL, PRIORITY.IMPORTANT, PRIORITY.BACKGROUND]) {
-      if (this.queues[p].length > 0) {
-        // Sonderlogik für PROVIDER.ALPHA_VANTAGE: Prüfen, ob wir überhaupt einen Slot frei haben
-        const isAVSlotAvailable = (this.avRequestsToday < this.avDailyLimit) && (this.avRequestsThisMinute < this.avRequestsPerMinute);
-        
-        // Finde den ersten Task in der Queue, der kein PROVIDER.ALPHA_VANTAGE ist ODER falls Slot frei ist
-        const taskIndex = this.queues[p].findIndex(t => t.provider !== PROVIDER.ALPHA_VANTAGE || isAVSlotAvailable);
-        
-        if (taskIndex !== -1) {
-          nextTask = this.queues[p].splice(taskIndex, 1)[0];
-          queueUsed = p;
-          break;
-        }
-      }
-    }
-
-    if (!nextTask) {
-      // Falls wir nur noch PROVIDER.ALPHA_VANTAGE Tasks haben, aber im Limit sind, warten wir kurz (1 Sek)
-      const hasAVTasks = this.queues[PRIORITY.CRITICAL].length > 0 || 
-                         this.queues[PRIORITY.IMPORTANT].length > 0 || 
-                         this.queues[PRIORITY.BACKGROUND].length > 0;
-      if (hasAVTasks) {
-        setTimeout(() => this.processQueue(), CONFIG.REQUEST_MANAGER.LIMIT_WAIT_TIME);
-      }
+    // Guard: Verhindert Mehrfachverarbeitung und vorzeitige Deadlocks (Bugfix-Audit 30.1)
+    if (this.isProcessing) {
+      Logger.info(LOG.DEBUG.GUARD_TRIGGERED);
       return;
     }
-
+    
     this.isProcessing = true;
+    Logger.info(LOG.DEBUG.GUARD_PASSED);
 
     try {
-      // Tracking für PROVIDER.ALPHA_VANTAGE
-      if (nextTask.provider === PROVIDER.ALPHA_VANTAGE) {
-        this.avRequestsToday++;
-        this.avRequestsThisMinute++;
-      }
+      // Hauptschleife zur Abarbeitung der Queue (Refactoring 31.4)
+      while (true) {
+        let nextTask = null;
 
-      // Task ausführen
-      const result = await nextTask.taskFn();
-      nextTask.resolve(result);
+        // Prioritäten: PRIORITY.CRITICAL > PRIORITY.IMPORTANT > PRIORITY.BACKGROUND
+        for (const p of [PRIORITY.CRITICAL, PRIORITY.IMPORTANT, PRIORITY.BACKGROUND]) {
+          if (this.queues[p].length > 0) {
+            // Sonderlogik für PROVIDER.ALPHA_VANTAGE: Prüfen, ob wir überhaupt einen Slot frei haben
+            const isAVSlotAvailable = (this.avRequestsToday < this.avDailyLimit) && (this.avRequestsThisMinute < this.avRequestsPerMinute);
+            
+            // Finde den ersten Task in der Queue, der kein PROVIDER.ALPHA_VANTAGE ist ODER falls Slot frei ist
+            const taskIndex = this.queues[p].findIndex(t => t.provider !== PROVIDER.ALPHA_VANTAGE || isAVSlotAvailable);
+            
+            if (taskIndex !== -1) {
+              nextTask = this.queues[p].splice(taskIndex, 1)[0];
+              break;
+            }
+          }
+        }
 
-    } catch (error) {
-      // Retry-Logik (Regel 12)
-      if (nextTask.retries < CONFIG.REQUEST_MANAGER.MAX_RETRIES && error.message !== INTERNAL_ERR.AV_DAILY_LIMIT) {
-        nextTask.retries++;
-        Logger.warn(`[RequestManager] Task fehlgeschlagen (${nextTask.provider}). Retry ${nextTask.retries}/${CONFIG.REQUEST_MANAGER.MAX_RETRIES}. Fehler: ${error.message}`);
-        
-        // Zurück in die Queue (ans Ende der jeweiligen Priorität)
-        this.queues[nextTask.priority].push(nextTask);
-      } else {
-        // Finales Scheitern
-        if (error.message === INTERNAL_ERR.AV_DAILY_LIMIT) {
-          nextTask.reject({ status: HttpStatus.TOO_MANY_REQUESTS, message: 'Provider Limit Reached for today.' });
-        } else {
-          Logger.error(`[RequestManager] Task endgültig fehlgeschlagen nach ${nextTask.retries} Retries: ${error.message}`);
-          nextTask.reject(error);
+        if (!nextTask) {
+          // Falls wir nur noch PROVIDER.ALPHA_VANTAGE Tasks haben, aber im Limit sind, warten wir kurz
+          const hasPendingTasks = this.getQueueSize() > 0;
+          if (hasPendingTasks && !this._isRateLimited) {
+            Logger.info(`[RequestManager] Rate Limit Delay: ${CONFIG.REQUEST_MANAGER.LIMIT_WAIT_TIME}ms`);
+            this._isRateLimited = true;
+            setTimeout(() => {
+              this._isRateLimited = false;
+              this.processQueue();
+            }, CONFIG.REQUEST_MANAGER.LIMIT_WAIT_TIME);
+          }
+          break; // Schleife verlassen, wenn kein ausführbarer Task gefunden wurde
+        }
+
+        const remaining = this.getQueueSize();
+        Logger.info(LOG.TRACE.QUEUE_ATTEMPT, nextTask.id, remaining + 1);
+
+        try {
+          // Tracking für PROVIDER.ALPHA_VANTAGE
+          if (nextTask.provider === PROVIDER.ALPHA_VANTAGE) {
+            this.avRequestsToday++;
+            this.avRequestsThisMinute++;
+          }
+
+          // Task ausführen
+          const result = await nextTask.taskFn();
+          nextTask.resolve(result);
+
+        } catch (error) {
+          // Retry-Logik (Regel 12)
+          if (nextTask.retries < CONFIG.REQUEST_MANAGER.MAX_RETRIES && error.message !== INTERNAL_ERR.AV_DAILY_LIMIT) {
+            nextTask.retries++;
+            Logger.warn(`[RequestManager] Task fehlgeschlagen (${nextTask.provider}) ID: ${nextTask.id}. Retry ${nextTask.retries}/${CONFIG.REQUEST_MANAGER.MAX_RETRIES}. Fehler: ${error.message}`);
+            
+            // Zurück in die Queue (ans Ende der jeweiligen Priorität)
+            this.queues[nextTask.priority].push(nextTask);
+          } else {
+            // Finales Scheitern
+            if (error.message === INTERNAL_ERR.AV_DAILY_LIMIT) {
+              nextTask.reject({ status: HttpStatus.TOO_MANY_REQUESTS, message: Messages.ERR_AV_DAILY_LIMIT });
+            } else {
+              Logger.error(`[RequestManager] Task ID ${nextTask.id} endgültig fehlgeschlagen nach ${nextTask.retries} Retries: ${error.message}`);
+              nextTask.reject(error);
+            }
+          }
         }
       }
+
+    } catch (criticalError) {
+      Logger.error(LOG.DEBUG.PROC_ENTRY_ERROR, criticalError.message);
     } finally {
-      this.isProcessing = false;
-      // Sofort weitermachen (setImmediate), um die Performance der Queue hochzuhalten
-      setImmediate(() => this.processQueue());
+      this.isProcessing = false; // Systemfreigabe (Bugfix-Audit 31.6)
+      if (this.getQueueSize() > 0) {
+        setImmediate(() => this.processQueue());
+      }
     }
   }
 
   /**
-   * Hilfsfunktion zum asynchronen Warten.
-   * @param {number} ms - Millisekunden.
-   * @returns {Promise<void>}
+   * Berechnet die Gesamtgröße aller Warteschlangen.
+   * @returns {number}
+   */
+  getQueueSize() {
+    return Object.values(this.queues).reduce((sum, q) => sum + q.length, 0);
+  }
+
+  /**
+   * Heartbeat-Log: Gibt alle 5 Sekunden den Status der Queue aus, falls diese nicht leer ist.
    * @private
    */
-  _sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  _heartbeat() {
+    const size = this.getQueueSize();
+    if (size > 0 || this.isProcessing) {
+      Logger.info(`[RequestManager] Heartbeat - Queue Size: ${size}, isProcessing: ${this.isProcessing}, AV Today: ${this.avRequestsToday}/${this.avDailyLimit}`);
+    }
+  }
+
+  /**
+   * Resettet den Status des RequestManagers (primär für Unit-Tests).
+   */
+  reset() {
+    this.queues[PRIORITY.CRITICAL] = [];
+    this.queues[PRIORITY.IMPORTANT] = [];
+    this.queues[PRIORITY.BACKGROUND] = [];
+    this.avRequestsToday = 0;
+    this.avRequestsThisMinute = 0;
+    this.isProcessing = false;
+    this.requestIdCounter = 0;
+    this._isRateLimited = false;
+    
+    // Timer neu starten mit aktuellem rateLimitWindow
+    if (this.resetTimer) clearInterval(this.resetTimer);
+    this.resetTimer = setInterval(() => { this.avRequestsThisMinute = 0; }, this.rateLimitWindow);
+    
+    Logger.info('[RequestManager] State manually reset.');
   }
 }
 

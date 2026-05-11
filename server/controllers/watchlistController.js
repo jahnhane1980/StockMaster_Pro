@@ -1,8 +1,4 @@
 // server/controllers/WatchlistController.js
-const { db } = require('../db/Database');
-const TickerRepository = require('../repositories/TickerRepository');
-const StockService = require('../services/StockService');
-const IntelligenceDAO = require('../models/IntelligenceDAO');
 const Logger = require('../utils/Logger');
 const HttpStatus = require('../utils/HttpStatus');
 const MESSAGES = require('../utils/Messages');
@@ -14,6 +10,18 @@ const { TECH, CONFIG, RESPONSE_KEYS, VALIDATION } = require('../utils/AppConstan
  */
 class WatchlistController {
   
+  /**
+   * Erstellt eine Instanz des WatchlistController.
+   * @param {Object} stockService - Der Service für Aktien-Operationen.
+   * @param {Object} tickerRepository - Repository für Ticker-Stammdaten.
+   * @param {Object} intelligenceDAO - DAO für Intelligence-Daten.
+   */
+  constructor(stockService, tickerRepository, intelligenceDAO) {
+    this.stockService = stockService;
+    this.tickerRepository = tickerRepository;
+    this.intelligenceDAO = intelligenceDAO;
+  }
+
   /**
    * Wird aufgerufen, wenn das Frontend einen neuen Ticker hinzufügt.
    * POST /api/watchlist
@@ -39,7 +47,7 @@ class WatchlistController {
 
     try {
       // 1. Ticker in der Datenbank speichern (Initialer Eintrag)
-      TickerRepository.upsertTicker({ 
+      this.tickerRepository.upsertTicker({ 
         symbol: ticker, 
         name: name || TECH.EMPTY_STRING 
       });
@@ -48,7 +56,7 @@ class WatchlistController {
       Logger.info(`Background-Sync gestartet für Symbol: ${ticker}`);
       
       // 2. Hintergrund-Sync anstoßen (ohne await, um UI nicht zu blockieren)
-      StockService.syncTickerData(ticker).catch(e => {
+      this.stockService.syncTickerData(ticker).catch(e => {
         Logger.error(`[WatchlistController] Hintergrund-Sync Fehler für ${ticker}: ${e.message}`);
       });
 
@@ -99,7 +107,7 @@ class WatchlistController {
     }
 
     try {
-      IntelligenceDAO.upsertCorrelation(
+      this.intelligenceDAO.upsertCorrelation(
         mainTicker.toUpperCase(), 
         linkedTicker.toUpperCase(), 
         numericScore
@@ -119,44 +127,6 @@ class WatchlistController {
       });
     }
   }
-
-  /**
-   * Wird aufgerufen, wenn im Frontend auf eine Aktie geklickt wird (Board-Daten laden).
-   * GET /api/intelligence/:ticker
-   * 
-   * @param {Object} req - Das Express Request-Objekt.
-   * @param {Object} res - Das Express Response-Objekt.
-   * @returns {Promise<void>} - Sendet eine JSON-Antwort mit dem aggregierten Datenpaket (DTO) (Regel 13).
-   */
-  async getIntelligenceBoard(req, res) {
-    const ticker = req.params.ticker.toUpperCase();
-
-    try {
-      // StockService aggregiert Daten von verschiedenen Providern und aus der DB.
-      const intelligenceData = await StockService.getIntelligenceData(ticker);
-      return res.status(HttpStatus.OK).json({
-        [RESPONSE_KEYS.SUCCESS]: true,
-        [RESPONSE_KEYS.DATA]: intelligenceData,
-        [RESPONSE_KEYS.ERROR]: null
-      });
-    } catch (error) {
-      Logger.error(`[WatchlistController] Fehler Board für ${ticker}: ${error.message}`);
-      
-      if (error instanceof StockMasterError) {
-        return res.status(error.statusCode).json({ 
-          [RESPONSE_KEYS.SUCCESS]: false,
-          [RESPONSE_KEYS.DATA]: null,
-          [RESPONSE_KEYS.ERROR]: error.message 
-        });
-      }
-      
-      return res.status(HttpStatus.SERVER_ERROR).json({ 
-        [RESPONSE_KEYS.SUCCESS]: false, 
-        [RESPONSE_KEYS.DATA]: null, 
-        [RESPONSE_KEYS.ERROR]: MESSAGES.ERR_BOARD_LOAD_FAILED 
-      });
-    }
-  }
 }
 
-module.exports = new WatchlistController();
+module.exports = WatchlistController;

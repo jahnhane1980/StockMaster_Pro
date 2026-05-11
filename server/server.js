@@ -8,20 +8,48 @@ const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
-const { initDB } = require('./db/Database');
 const Logger = require('./utils/Logger');
 const { PRIORITY, PROVIDER, SERVER } = require('./utils/AppConstants');
 
-// Repositories
+// 1. DAOs & Repositories (Data Layer)
 const TickerRepository = require('./repositories/TickerRepository');
+const HistoricalDataDAO = require('./models/HistoricalDataDAO');
+const IntelligenceDAO = require('./models/IntelligenceDAO');
 const RepoFactory = require('./repositories/RepoFactory');
 
-// Services
+// 2. Services (Business Layer)
 const RequestManager = require('./services/RequestManager');
+const StockService = require('./services/StockService');
+const AnalysisService = require('./services/AnalysisService');
+const CorrelationStrategy = require('./services/strategies/CorrelationStrategy');
 
-// Controllers
+// 3. Controllers (Presentation Layer)
 const WatchlistController = require('./controllers/WatchlistController');
 const IntelligenceController = require('./controllers/IntelligenceController');
+
+// --- Composition Root (Regel 4 & 23) ---
+const avMarketDataRepo = RepoFactory.getAVMarketDataRepo();
+const avIntelligenceRepo = RepoFactory.getAVIntelligenceRepo();
+const avFundamentalRepo = RepoFactory.getAVFundamentalRepo();
+const massiveRepo = RepoFactory.getMassiveRepo();
+
+const correlationStrategy = new CorrelationStrategy(Logger);
+const analysisService = new AnalysisService(Logger, correlationStrategy);
+const stockService = new StockService(
+  avMarketDataRepo,
+  avIntelligenceRepo,
+  avFundamentalRepo,
+  massiveRepo, 
+  TickerRepository, 
+  HistoricalDataDAO, 
+  IntelligenceDAO, 
+  Logger, 
+  RequestManager
+);
+
+// Instanziierung der Controller mit den fertigen Services
+const watchlistController = new WatchlistController(stockService, TickerRepository, IntelligenceDAO);
+const intelligenceController = new IntelligenceController(analysisService, HistoricalDataDAO, stockService);
 
 const app = express();
 const PORT = process.env.PORT || SERVER.DEFAULT_PORT;
@@ -34,7 +62,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Rate Limiting für API-Routen (Regel 12)
+// Rate Limiting für API-Routen
 const apiLimiter = rateLimit({
   windowMs: SERVER.RATE_LIMIT_WINDOW_MS,
   max: SERVER.RATE_LIMIT_MAX_REQUESTS,
@@ -54,43 +82,25 @@ app.use('/api/', apiLimiter);
 app.use(express.json());
 
 /**
- * Statische Dateien bereitstellen:
- * Warum: Trennung von Client (Frontend-Assets in /public) und Server (Logik in /server).
- * Dies ermöglicht das einfache Servieren von HTML, CSS und JS-Modulen direkt vom Root.
+ * Statische Dateien bereitstellen
  */
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Server-Start loggen
-app.listen(PORT, () => {
-    Logger.info(`🚀 StockMaster Pro läuft auf http://localhost:${PORT}`);
-});
-
 /**
- * API Endpunkte (Delegiert an Controller)
+ * API Endpunkte (Delegiert an Controller-Instanzen)
+ * Regel: Definition am Ende vor app.listen
  */
 
-/**
- * Intelligence Board Daten abrufen.
- * Delegiert an: WatchlistController.getIntelligenceBoard
- */
-app.get('/api/intelligence/:ticker', (req, res) => WatchlistController.getIntelligenceBoard(req, res));
+// Intelligence Board
+app.get('/api/intelligence', (req, res) => intelligenceController.getIntelligence(req, res));
+app.get('/api/intelligence/:ticker', (req, res) => intelligenceController.getIntelligence(req, res));
+app.get('/api/intelligence/correlations/:symbol', (req, res) => intelligenceController.getMarketCorrelations(req, res));
 
-/**
- * Markt-Korrelationen (BTC, Gold) abrufen.
- * Delegiert an: IntelligenceController.getMarketCorrelations
- */
-app.get('/api/intelligence/correlations/:symbol', (req, res) => IntelligenceController.getMarketCorrelations(req, res));
-
-/**
- * Direkter Abruf von Fundamentaldaten (AV - Prio PRIORITY.BACKGROUND).
- * @param {Object} req - Request-Objekt.
- * @param {Object} res - Response-Objekt.
- * @returns {JSON} - Die Fundamentaldaten oder Fehlermeldung.
- */
+// Fundamentaldaten
 app.get('/api/fundamentals/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     try {
-        const data = await RequestManager.enqueue(PRIORITY.BACKGROUND, PROVIDER.ALPHA_VANTAGE, () => RepoFactory.getAlphaVantageRepo().getCompanyOverview(symbol));
+        const data = await avFundamentalRepo.getCompanyOverview(symbol);
         res.json({ success: true, data, error: null });
     } catch (err) {
         Logger.error(`[Server] Fehler bei Fundamentaldaten-Abruf für ${symbol}: ${err.message}`);
@@ -98,24 +108,10 @@ app.get('/api/fundamentals/:symbol', async (req, res) => {
     }
 });
 
-/**
- * Watchlist: Ticker hinzufügen.
- * Delegiert an: WatchlistController.addTickerToWatchlist
- */
-app.post('/api/watchlist', (req, res) => WatchlistController.addTickerToWatchlist(req, res));
+// Watchlist & Ticker
+app.post('/api/watchlist', (req, res) => watchlistController.addTickerToWatchlist(req, res));
+app.post('/api/correlations', (req, res) => watchlistController.addCorrelation(req, res));
 
-/**
- * Korrelationen: Verknüpfung erstellen.
- * Delegiert an: WatchlistController.addCorrelation
- */
-app.post('/api/correlations', (req, res) => WatchlistController.addCorrelation(req, res));
-
-/**
- * Watchlist: Alle Ticker abrufen.
- * @param {Object} req - Request-Objekt.
- * @param {Object} res - Response-Objekt.
- * @returns {JSON} - Liste aller Ticker in der Watchlist.
- */
 app.get('/api/tickers', (req, res) => {
     try {
         const data = TickerRepository.getAllTickers();
@@ -126,12 +122,6 @@ app.get('/api/tickers', (req, res) => {
     }
 });
 
-/**
- * Watchlist: Ticker löschen.
- * @param {Object} req - Request-Objekt.
- * @param {Object} res - Response-Objekt.
- * @returns {JSON} - Erfolgsstatus oder Fehlermeldung.
- */
 app.delete('/api/tickers/:symbol', (req, res) => {
     try {
         TickerRepository.deleteTicker(req.params.symbol.toUpperCase());
@@ -142,15 +132,9 @@ app.delete('/api/tickers/:symbol', (req, res) => {
     }
 });
 
-/**
- * Haupteinstiegspunkt für das Frontend.
- * Warum: Unterstützung von Single Page Application (SPA) Routen.
- */
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
-/**
- * Globale Fehlerbehandlung (Intent):
- * Warum: Um sicherzustellen, dass keine ungefilterten Stacktraces an das Frontend gelangen
- * und jeder Fehler zentral geloggt wird. Derzeit über lokale try/catch Blöcke in Routen
- * und Controllern gelöst, die auf das zentrale Logger-Modul zurückgreifen.
- */
+// Server-Start
+app.listen(PORT, () => {
+    Logger.info(`🚀 StockMaster Pro läuft auf http://localhost:${PORT}`);
+});

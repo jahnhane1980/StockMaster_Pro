@@ -83,7 +83,19 @@ const TECH = Object.freeze({
 
 const LOG = Object.freeze({
   DEFAULT_DIR: 'server/logs',
-  DEFAULT_LEVEL: 'info'
+  DEFAULT_LEVEL: 'info',
+  TRACE: {
+    REPO_HANDOVER: '[Repo-Trace] Handing over to Queue - Symbol: %s - Queue: %d',
+    QUEUE_RECEIVED: '[Queue-Trace] Received Task - Type: %s, ID: %d - Queue: %d',
+    QUEUE_ATTEMPT: '[Queue-Trace] Attempting to execute Task %d - Queue: %d'
+  },
+  DEBUG: {
+    CALLING_PROC: '[Debug-Trace] Calling processQueue - Context: %s, isProcessing: %s',
+    ENTERED_PROC: '[Debug-Trace] Entered processQueue - Context: %s',
+    GUARD_TRIGGERED: '[Debug-Trace] Guard triggered - isProcessing is true, exiting',
+    GUARD_PASSED: '[Debug-Trace] Guard passed - setting isProcessing to true',
+    PROC_ENTRY_ERROR: '[Debug-Trace] CRITICAL ERROR in processQueue entry: %s'
+  }
 });
 
 const CONFIG = Object.freeze({

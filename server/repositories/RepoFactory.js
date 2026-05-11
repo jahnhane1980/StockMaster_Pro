@@ -1,28 +1,48 @@
 // server/repositories/RepoFactory.js
-const AlphaVantageRepo = require('./AlphaVantageRepo');
-const AlphaVantageRepoMock = require('./AlphaVantageRepoMock');
+const AVMarketDataRepo = require('./AVMarketDataRepo');
+const AVIntelligenceRepo = require('./AVIntelligenceRepo');
+const AVFundamentalRepo = require('./AVFundamentalRepo');
+const AlphaVantageRepoMock = require('./AlphaVantageRepoMock'); // TODO: Später ggf. auch aufteilen
 const MassiveRepo = require('./MassiveRepo');
 const MassiveRepoMock = require('./MassiveRepoMock');
+const Logger = require('../utils/Logger');
+const RequestManager = require('../services/RequestManager');
 
 /**
  * Factory zur Bereitstellung von Repository-Instanzen.
- * Intent: Ermöglicht das Umschalten zwischen echten API-Zugriffen und Mock-Daten
- * basierend auf der Umgebungsvariable APP_MODE.
- * Die Factory dient als zentraler Zugriffspunkt (Rule 1) und abstrahiert die
- * konkrete Implementierung von den konsumierenden Services.
  */
 class RepoFactory {
   /**
-   * Gibt die passende Instanz des AlphaVantage-Repositories zurück.
-   * @returns {Object} - AlphaVantageRepo oder AlphaVantageRepoMock Instanz.
+   * Gibt das passende AlphaVantage Market Data Repository zurück.
+   */
+  static getAVMarketDataRepo() {
+    return process.env.APP_MODE === 'MOCK' ? AlphaVantageRepoMock : new AVMarketDataRepo(Logger, RequestManager);
+  }
+
+  /**
+   * Gibt das passende AlphaVantage Intelligence Repository zurück.
+   */
+  static getAVIntelligenceRepo() {
+    return process.env.APP_MODE === 'MOCK' ? AlphaVantageRepoMock : new AVIntelligenceRepo(Logger, RequestManager);
+  }
+
+  /**
+   * Gibt das passende AlphaVantage Fundamental Repository zurück.
+   */
+  static getAVFundamentalRepo() {
+    return process.env.APP_MODE === 'MOCK' ? AlphaVantageRepoMock : new AVFundamentalRepo(Logger, RequestManager);
+  }
+
+  /**
+   * Kompatibilitäts-Methode (für den Übergang).
+   * @deprecated
    */
   static getAlphaVantageRepo() {
-    return process.env.APP_MODE === 'MOCK' ? AlphaVantageRepoMock : AlphaVantageRepo;
+    return this.getAVMarketDataRepo();
   }
 
   /**
    * Gibt die passende Instanz des Massive-Repositories zurück.
-   * @returns {Object} - MassiveRepo oder MassiveRepoMock Instanz.
    */
   static getMassiveRepo() {
     return process.env.APP_MODE === 'MOCK' ? MassiveRepoMock : MassiveRepo;
